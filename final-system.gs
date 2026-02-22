@@ -1408,6 +1408,34 @@ function protectIdColumns_() {
   SpreadsheetApp.getUi().alert("Готово ✅ Колонка ID защищена (только тело таблицы).");
 }
 
+/* ================= onSelectionChange (focus marker) =================
+   Лёгкий focus-маркер строки на листах менеджеров, чтобы не путаться.
+*/
+
+function onSelectionChange(e) {
+  if (!e || !e.range) return;
+
+  const ss = SpreadsheetApp.getActive();
+  const sh = e.range.getSheet();
+  const sheetName = sh.getName();
+  const isManager = CFG.MANAGER_SHEETS.includes(sheetName);
+
+  // Всегда очищаем старый маркер при смене выделения.
+  clearSelectionMarker_(ss);
+  if (!isManager) return;
+
+  const layout = getLayout_();
+  const row = e.range.getRow();
+  if (row < layout.startRow) return;
+  if (e.range.getNumRows() !== 1) return;
+
+  const id = String(sh.getRange(row, idx1_("ID"), 1, 1).getValue() || "").trim();
+  if (!id) return; // заголовки блоков/пустые строки не подсвечиваем
+
+  setSelectionMarker_(sh, row);
+  PropertiesService.getDocumentProperties().setProperty(SELECTION_MARKER_KEY, `${sheetName}||${row}`);
+}
+
 /* ================= onEdit (timestamps) =================
    ЖЕЛЕЗНО: работаем ТОЛЬКО на листах менеджеров.
    В БД ничего не автопроставляем.
@@ -1474,6 +1502,40 @@ function onEdit(e) {
    - если включен mute (после скриптовых перерисовок), НЕ ТРОГАЕТ ДАТЫ
      но обновляет baseline snapshot, чтобы потом не "догонял" и не менял даты.
 */
+
+
+const SELECTION_MARKER_KEY = "SYS_SELECTION_MARKER";
+
+function clearSelectionMarker_(ss) {
+  const props = PropertiesService.getDocumentProperties();
+  const raw = String(props.getProperty(SELECTION_MARKER_KEY) || "");
+  if (!raw) return;
+
+  const [sheetName, rowStr] = raw.split("||");
+  const row = Number(rowStr || "0");
+  if (!sheetName || !row) return;
+
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return;
+
+  const colProject = idx1_("Проект");
+  try {
+    sh.getRange(row, colProject, 1, 1).setBorder(null, false, null, null, null, null);
+  } catch (e) {}
+
+  props.deleteProperty(SELECTION_MARKER_KEY);
+}
+
+function setSelectionMarker_(sh, row) {
+  const colProject = idx1_("Проект");
+  try {
+    sh.getRange(row, colProject, 1, 1).setBorder(
+      null, true, null, null, null, null,
+      "#2563eb",
+      SpreadsheetApp.BorderStyle.SOLID_THICK
+    );
+  } catch (e) {}
+}
 
 const SNAPSHOT_SHEET = "_SNAPSHOT";
 
