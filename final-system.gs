@@ -165,7 +165,6 @@ function onOpen() {
     .addSeparator()
     .addItem("АДМИН: Защитить ID", "protectIdColumns_")
     .addItem("АДМИН: Включить ремонтёр snapshot", "setupSnapshotRepairTrigger_")
-    .addItem("АДМИН: Включить focus-маркер строки", "setupSelectionFocusTrigger_")
     .addSeparator()
     .addItem("АДМИН: Проставить ID пустым строкам в БД", "adminFillMissingIdsInDB")
     .addItem("АДМИН: Восстановить формат текущего листа", "adminRestoreFormatActiveSheet")
@@ -1711,22 +1710,10 @@ function repairTimestampsBySnapshot_() {
 
 
 function setupSelectionFocusTrigger_() {
-  const ss = SpreadsheetApp.getActive();
-
-  ScriptApp.getProjectTriggers().forEach(t => {
-    try {
-      if (t.getHandlerFunction && t.getHandlerFunction() === "onSelectionChange") {
-        ScriptApp.deleteTrigger(t);
-      }
-    } catch (e) {}
-  });
-
-  ScriptApp.newTrigger("onSelectionChange")
-    .forSpreadsheet(ss)
-    .onSelectionChange()
-    .create();
-
-  SpreadsheetApp.getUi().alert("Готово ✅ Focus-маркер строки включен.");
+  SpreadsheetApp.getUi().alert(
+    "Focus-маркер работает как простой триггер onSelectionChange и не требует установки через ScriptApp.\n" +
+    "Просто обнови страницу таблицы и кликай по строкам с ID на листах менеджеров."
+  );
 }
 
 // ✅ Публичные обёртки (чтобы были видны в списке триггеров)
