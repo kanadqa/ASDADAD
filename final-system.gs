@@ -32,11 +32,10 @@ const CFG = {
   ],
 
   RATINGS: ["⭐","⭐⭐","⭐⭐⭐","⭐⭐⭐⭐","⭐⭐⭐⭐⭐"],
-  COUNTERPARTY_FLOW_TYPES: ["Самообработка"],
   MONEY_FLOW_STATUSES: ["🟦 Отыгрывается","🟧 Выводится","🛑 Проиграно"],
 
   DB_HEADERS: [
-    "ID","Менеджер","Контрагент","Флоу","Проект","Логин","Пароль","Ссылка",
+    "ID","Менеджер","Контрагент","Проект","Логин","Пароль","Ссылка",
     "Баланс","Дата баланса","Статус","Заметка",
     "Отправлено","Готово к выводу","На выводе",
     "Статус денег","Обновлено","Оценка контрагента"
@@ -44,14 +43,14 @@ const CFG = {
 
   CREATOR_NICK: "Khan",
 
-  SEPARATOR_ROWS: 2,
+  SEPARATOR_ROWS: 1,
   PRETTY_ROWS_LIMIT: 1000,
 
   BALANCE_DATETIME_FORMAT: "dd.MM.yyyy HH:mm:ss",
 
   COL_WIDTHS: [
-    100,140,200,120,145,190,145,185,115,145,
-    150,170,145,145,145,155,190,170
+    100,140,200,135,190,130,170,105,145,150,
+    165,140,140,140,150,185,190
   ],
 
   // сколько секунд "глушим" snapshot-ремонтёр после любой скриптовой перерисовки
@@ -412,7 +411,6 @@ function insertSampleData_(db) {
   r[idx0_("ID")] = nextRowId_();
   r[idx0_("Менеджер")] = CFG.MANAGER_SHEETS[0] || "Alpha";
   r[idx0_("Контрагент")] = "@example";
-  r[idx0_("Флоу")] = "Самообработка";
   r[idx0_("Проект")] = CFG.PROJECTS[0] || "1xBet";
   r[idx0_("Логин")] = "alpha@mail.com";
   r[idx0_("Пароль")] = "pass123";
@@ -518,7 +516,6 @@ function refreshManagerSheet_(ss, managerName, opts) {
   const iManager = idx0_("Менеджер");
   const iStatus  = idx0_("Статус");
   const iCp      = idx0_("Контрагент");
-  const iFlow    = idx0_("Флоу");
   const iProject = idx0_("Проект");
   const iId      = idx0_("ID");
 
@@ -567,11 +564,10 @@ function refreshManagerSheet_(ss, managerName, opts) {
 
   // build display with separators
   const display = [];
-  let prevCp = null;
+  let prevWasLabel = false;
 
   rows.forEach(r => {
     const cp = String(r[iCp] || "");
-    const flow = String(r[iFlow] || "");
     const isNewBlock = !prevCp || cp !== prevCp;
     if (isNewBlock) {
       if (prevCp) {
@@ -580,7 +576,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
         }
       }
       const label = new Array(lastCol).fill("");
-      label[idx0_("Флоу")] = flow ? `${cp} • ${flow}` : cp;
+      label[idx0_("Проект")] = `Контрагент: ${cp}`;
       display.push(label);
     }
 
@@ -596,7 +592,6 @@ function refreshManagerSheet_(ss, managerName, opts) {
 
     // Данные уровня контрагента показываем только в объединённой строке над блоком.
     out[iCp] = "";
-    out[iFlow] = "";
     out[idx0_("Оценка контрагента")] = "";
 
     display.push(out);
@@ -659,7 +654,6 @@ function pushManagerEditsToDB_(ss, managerName) {
   const iId      = idx0_("ID");
   const iManager = idx0_("Менеджер");
   const iCp      = idx0_("Контрагент");
-  const iFlow    = idx0_("Флоу");
   const iRating  = idx0_("Оценка контрагента");
 
   let updated = 0;
@@ -668,14 +662,12 @@ function pushManagerEditsToDB_(ss, managerName) {
   const updates = [];
 
   let currentCounterparty = "";
-  let currentFlow = "";
   let currentRating = "";
 
   for (const r of rows) {
     const id = String(r[iId] || "").trim();
     if (!id) {
       currentCounterparty = "";
-      currentFlow = "";
       currentRating = "";
       skipped++;
       continue;
@@ -685,10 +677,6 @@ function pushManagerEditsToDB_(ss, managerName) {
     if (cp) currentCounterparty = cp;
     else if (currentCounterparty) r[iCp] = currentCounterparty;
 
-    const flow = String(r[iFlow] || "").trim();
-    if (flow) currentFlow = flow;
-    else if (currentFlow) r[iFlow] = currentFlow;
-
     const ratingRaw = String(r[iRating] || "").trim();
     if (ratingRaw) currentRating = ratingRaw;
     else if (currentRating) r[iRating] = currentRating;
@@ -697,9 +685,6 @@ function pushManagerEditsToDB_(ss, managerName) {
     if (!hit) { skipped++; continue; }
 
     r[iManager] = managerName;
-
-    const flowToValidate = String(r[iFlow] || "").trim();
-    if (flowToValidate && !CFG.COUNTERPARTY_FLOW_TYPES.includes(flowToValidate)) { skipped++; continue; }
 
     const rating = String(r[iRating] || "").trim();
     if (rating && !CFG.RATINGS.includes(rating)) { skipped++; continue; }
@@ -777,7 +762,6 @@ function applyManagerValidationsById_(sh, displayRowCount) {
   const ids = sh.getRange(start, colId, displayRowCount, 1).getValues();
 
   const projectDv = dvList_(CFG.PROJECTS, false);
-  const flowDv = dvList_(CFG.COUNTERPARTY_FLOW_TYPES, false);
   const statusDv = dvList_(CFG.STATUSES, true);
   const ratingDv = dvList_(CFG.RATINGS, false);
   const moneyDv = dvList_(CFG.MONEY_FLOW_STATUSES, true);
@@ -788,7 +772,6 @@ function applyManagerValidationsById_(sh, displayRowCount) {
     if (!hasId) continue;
 
     sh.getRange(row, idx1_("Проект")).setDataValidation(projectDv);
-    sh.getRange(row, idx1_("Флоу")).setDataValidation(flowDv);
     sh.getRange(row, idx1_("Статус")).setDataValidation(statusDv);
     sh.getRange(row, idx1_("Оценка контрагента")).setDataValidation(ratingDv);
     sh.getRange(row, idx1_("Статус денег")).setDataValidation(moneyDv);
@@ -835,38 +818,35 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
   const lastCol = CFG.DB_HEADERS.length;
 
   const colId = 1;
-  const colCp = idx1_("Контрагент");
-  const colFlow = idx1_("Флоу");
   const colProject = idx1_("Проект");
   const colStatus = idx1_("Статус");
 
   const ids = sh.getRange(start, colId, displayRowCount, 1).getValues();
-  const cps = sh.getRange(start, colCp, displayRowCount, 1).getValues();
 
   try {
     sh.getRange(start, 1, displayRowCount, lastCol).setBorder(false, false, false, false, false, false);
   } catch (e) {}
 
-  let prevCp = null;
+  let prevWasLabel = false;
 
   for (let i = 0; i < displayRowCount; i++) {
     const r = start + i;
     const id = String(ids[i][0] || "").trim();
-    const cp = String(cps[i][0] || "").trim();
 
     if (!id) {
-      const labelText = String(sh.getRange(r, colFlow).getValue() || "").trim();
+      const labelText = String(sh.getRange(r, colProject).getValue() || "").trim();
       if (labelText) {
-        const mergeCols = Math.max(1, lastCol - colFlow + 1);
-        try { sh.getRange(r, colFlow, 1, mergeCols).breakApart(); } catch (e) {}
-        try { sh.getRange(r, colFlow, 1, mergeCols).merge(); } catch (e) {}
-        sh.getRange(r, colFlow)
+        const mergeCols = Math.max(1, lastCol - colProject + 1);
+        try { sh.getRange(r, colProject, 1, mergeCols).breakApart(); } catch (e) {}
+        try { sh.getRange(r, colProject, 1, mergeCols).merge(); } catch (e) {}
+        sh.getRange(r, colProject)
           .setHorizontalAlignment("left")
           .setFontWeight("bold")
-          .setFontSize(11)
-          .setFontColor("#111827")
-          .setBackground("#e2e8f0");
-        try { sh.setRowHeight(r, 26); } catch (e) {}
+          .setFontStyle("italic")
+          .setFontSize(10)
+          .setFontColor("#334155")
+          .setBackground("#f1f5f9");
+        try { sh.setRowHeight(r, 22); } catch (e) {}
       } else {
         sh.getRange(r, 1, 1, lastCol)
           .setBackground("#ffffff")
@@ -874,12 +854,13 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
           .setFontWeight("normal");
         try { sh.setRowHeight(r, 10); } catch (e) {}
       }
+      prevWasLabel = true;
       continue;
     }
 
-    const isNewBlock = prevCp === null || (cp && cp !== prevCp);
+    const isNewBlock = prevWasLabel;
 
-    if (prevCp !== null && isNewBlock) {
+    if (isNewBlock) {
       try {
         sh.getRange(r, 1, 1, lastCol).setBorder(
           true, null, null, null, null, null,
@@ -892,15 +873,13 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
     if (isNewBlock) {
       try { sh.setRowHeight(r, 34); } catch (e) {}
       sh.getRange(r, 1, 1, lastCol).setBackground("#eef2f7");
-      sh.getRange(r, colCp).setFontWeight("bold");
-      sh.getRange(r, colFlow).setFontWeight("bold");
       sh.getRange(r, colProject).setFontWeight("bold");
       sh.getRange(r, colStatus).setFontWeight("bold");
     } else {
       try { sh.setRowHeight(r, 30); } catch (e) {}
     }
 
-    if (cp) prevCp = cp;
+    prevWasLabel = false;
   }
 }
 
@@ -974,7 +953,6 @@ function applyDBValidations_(sh) {
 
   sh.getRange(start, idx1_("Менеджер"), maxRows, 1).setDataValidation(dvList_(CFG.MANAGER_SHEETS, true));
   sh.getRange(start, idx1_("Проект"), maxRows, 1).setDataValidation(dvList_(CFG.PROJECTS, true));
-  sh.getRange(start, idx1_("Флоу"), maxRows, 1).setDataValidation(dvList_(CFG.COUNTERPARTY_FLOW_TYPES, false));
   sh.getRange(start, idx1_("Статус"),  maxRows, 1).setDataValidation(dvList_(CFG.STATUSES, true));
   sh.getRange(start, idx1_("Оценка контрагента"), maxRows, 1).setDataValidation(dvList_(CFG.RATINGS, false));
   sh.getRange(start, idx1_("Статус денег"), maxRows, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, true));
