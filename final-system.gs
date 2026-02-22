@@ -32,14 +32,14 @@ const CFG = {
   ],
 
   RATINGS: ["⭐","⭐⭐","⭐⭐⭐","⭐⭐⭐⭐","⭐⭐⭐⭐⭐"],
-  COUNTERPARTY_FLOW_TYPES: ["old", "new"],
+  COUNTERPARTY_FLOW_TYPES: ["Самообработка"],
   MONEY_FLOW_STATUSES: ["🟦 Отыгрывается","🟧 Выводится","🛑 Проиграно"],
 
   DB_HEADERS: [
-    "ID","Менеджер","Контрагент","Флоу контрагента","Проект","Логин","Пароль","Ссылка",
+    "ID","Менеджер","Контрагент","Флоу","Проект","Логин","Пароль","Ссылка",
     "Баланс","Дата баланса","Статус","Заметка",
-    "Отправлено на отыгрыш","Готово к выводу","Поставили на вывод",
-    "Статус движения средств","Обновлено","Оценка контрагента"
+    "Отправлено","Готово к выводу","На выводе",
+    "Статус денег","Обновлено","Оценка контрагента"
   ],
 
   CREATOR_NICK: "Khan",
@@ -50,8 +50,8 @@ const CFG = {
   BALANCE_DATETIME_FORMAT: "dd.MM.yyyy HH:mm:ss",
 
   COL_WIDTHS: [
-    100,140,220,120,170,190,170,220,130,145,
-    150,200,170,170,170,180,190,150
+    100,140,200,120,145,190,145,185,115,145,
+    150,170,145,145,145,155,190,170
   ],
 
   // сколько секунд "глушим" snapshot-ремонтёр после любой скриптовой перерисовки
@@ -265,7 +265,7 @@ function applyStandardFormats_(sh, startRow, rowCount) {
 
   sh.getRange(startRow, idx1_("Баланс"), rowCount, 1).setNumberFormat("#,##0.00");
   sh.getRange(startRow, idx1_("Дата баланса"), rowCount, 1).setNumberFormat(CFG.BALANCE_DATETIME_FORMAT);
-  sh.getRange(startRow, idx1_("Отправлено на отыгрыш"), rowCount, 3).setNumberFormat("#,##0.00");
+  sh.getRange(startRow, idx1_("Отправлено"), rowCount, 3).setNumberFormat("#,##0.00");
   sh.getRange(startRow, idx1_("Обновлено"), rowCount, 1).setNumberFormat("dd.MM.yyyy HH:mm:ss");
 }
 
@@ -395,6 +395,7 @@ function buildManagerSheets_(ss) {
     // скрываем ID и Менеджер
     try { sh.hideColumn(sh.getRange(1, 1)); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, 2)); } catch (e) {}
+    try { sh.hideColumn(sh.getRange(1, idx1_("Контрагент"))); } catch (e) {}
 
     applyManagerSheetFormatting_(sh);
     applyStatusConditionalFormatting_(sh);
@@ -411,7 +412,7 @@ function insertSampleData_(db) {
   r[idx0_("ID")] = nextRowId_();
   r[idx0_("Менеджер")] = CFG.MANAGER_SHEETS[0] || "Alpha";
   r[idx0_("Контрагент")] = "@example";
-  r[idx0_("Флоу контрагента")] = "new";
+  r[idx0_("Флоу")] = "Самообработка";
   r[idx0_("Проект")] = CFG.PROJECTS[0] || "1xBet";
   r[idx0_("Логин")] = "alpha@mail.com";
   r[idx0_("Пароль")] = "pass123";
@@ -421,10 +422,10 @@ function insertSampleData_(db) {
   r[idx0_("Статус")] = "● Активно";
   r[idx0_("Оценка контрагента")] = "⭐⭐⭐⭐⭐";
   r[idx0_("Заметка")] = "demo";
-  r[idx0_("Отправлено на отыгрыш")] = 300;
+  r[idx0_("Отправлено")] = 300;
   r[idx0_("Готово к выводу")] = 150;
-  r[idx0_("Поставили на вывод")] = 50;
-  r[idx0_("Статус движения средств")] = "🟦 Отыгрывается"; // вручную
+  r[idx0_("На выводе")] = 50;
+  r[idx0_("Статус денег")] = "🟦 Отыгрывается"; // вручную
   r[idx0_("Обновлено")] = now;
 
   db.getRange(layout.startRow, 1, 1, CFG.DB_HEADERS.length).setValues([r]);
@@ -517,7 +518,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
   const iManager = idx0_("Менеджер");
   const iStatus  = idx0_("Статус");
   const iCp      = idx0_("Контрагент");
-  const iFlow    = idx0_("Флоу контрагента");
+  const iFlow    = idx0_("Флоу");
   const iProject = idx0_("Проект");
   const iId      = idx0_("ID");
 
@@ -537,10 +538,10 @@ function refreshManagerSheet_(ss, managerName, opts) {
   );
 
   const protectedCols = [
-    "Отправлено на отыгрыш",
+    "Отправлено",
     "Готово к выводу",
-    "Поставили на вывод",
-    "Статус движения средств",
+    "На выводе",
+    "Статус денег",
     "Обновлено"
   ];
 
@@ -570,11 +571,17 @@ function refreshManagerSheet_(ss, managerName, opts) {
 
   rows.forEach(r => {
     const cp = String(r[iCp] || "");
+    const flow = String(r[iFlow] || "");
     const isNewBlock = !prevCp || cp !== prevCp;
-    if (prevCp && cp !== prevCp) {
-      for (let i = 0; i < CFG.SEPARATOR_ROWS; i++) {
-        display.push(new Array(lastCol).fill(""));
+    if (isNewBlock) {
+      if (prevCp) {
+        for (let i = 0; i < CFG.SEPARATOR_ROWS; i++) {
+          display.push(new Array(lastCol).fill(""));
+        }
       }
+      const label = new Array(lastCol).fill("");
+      label[idx0_("Проект")] = flow ? `${cp} • ${flow}` : cp;
+      display.push(label);
     }
 
     const out = r.slice();
@@ -587,12 +594,10 @@ function refreshManagerSheet_(ss, managerName, opts) {
       });
     }
 
-    // Показываем данные уровня контрагента только на первой строке блока.
-    if (!isNewBlock) {
-      out[iCp] = "";
-      out[iFlow] = "";
-      out[idx0_("Оценка контрагента")] = "";
-    }
+    // Данные уровня контрагента показываем только в объединённой строке над блоком.
+    out[iCp] = isNewBlock ? out[iCp] : "";
+    out[iFlow] = "";
+    out[idx0_("Оценка контрагента")] = "";
 
     display.push(out);
     prevCp = cp;
@@ -654,7 +659,7 @@ function pushManagerEditsToDB_(ss, managerName) {
   const iId      = idx0_("ID");
   const iManager = idx0_("Менеджер");
   const iCp      = idx0_("Контрагент");
-  const iFlow    = idx0_("Флоу контрагента");
+  const iFlow    = idx0_("Флоу");
   const iRating  = idx0_("Оценка контрагента");
 
   let updated = 0;
@@ -770,10 +775,10 @@ function applyManagerValidationsById_(sh, displayRowCount) {
   const start = startRow_();
 
   sh.getRange(start, idx1_("Проект"), displayRowCount, 1).setDataValidation(dvList_(CFG.PROJECTS, false));
-  sh.getRange(start, idx1_("Флоу контрагента"), displayRowCount, 1).setDataValidation(dvList_(CFG.COUNTERPARTY_FLOW_TYPES, false));
+  sh.getRange(start, idx1_("Флоу"), displayRowCount, 1).setDataValidation(dvList_(CFG.COUNTERPARTY_FLOW_TYPES, false));
   sh.getRange(start, idx1_("Статус"), displayRowCount, 1).setDataValidation(dvList_(CFG.STATUSES, true));
   sh.getRange(start, idx1_("Оценка контрагента"), displayRowCount, 1).setDataValidation(dvList_(CFG.RATINGS, false));
-  sh.getRange(start, idx1_("Статус движения средств"), displayRowCount, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, true));
+  sh.getRange(start, idx1_("Статус денег"), displayRowCount, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, true));
 }
 
 /* ================= TABLE DRAW HELPERS ================= */
@@ -817,7 +822,7 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
 
   const colId = 1;
   const colCp = idx1_("Контрагент");
-  const colFlow = idx1_("Флоу контрагента");
+  const colFlow = idx1_("Флоу");
   const colProject = idx1_("Проект");
   const colStatus = idx1_("Статус");
 
@@ -836,11 +841,23 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
     const cp = String(cps[i][0] || "").trim();
 
     if (!id) {
-      sh.getRange(r, 1, 1, lastCol)
-        .setBackground("#ffffff")
-        .setFontColor("#ffffff")
-        .setFontWeight("normal");
-      try { sh.setRowHeight(r, 18); } catch (e) {}
+      const labelText = String(sh.getRange(r, colProject).getValue() || "").trim();
+      if (labelText) {
+        try { sh.getRange(r, colProject, 1, Math.max(1, colStatus - colProject + 1)).breakApart(); } catch (e) {}
+        try { sh.getRange(r, colProject, 1, Math.max(1, colStatus - colProject + 1)).merge(); } catch (e) {}
+        sh.getRange(r, colProject)
+          .setHorizontalAlignment("left")
+          .setFontWeight("bold")
+          .setFontColor("#1f2937")
+          .setBackground("#e5e7eb");
+        try { sh.setRowHeight(r, 24); } catch (e) {}
+      } else {
+        sh.getRange(r, 1, 1, lastCol)
+          .setBackground("#ffffff")
+          .setFontColor("#ffffff")
+          .setFontWeight("normal");
+        try { sh.setRowHeight(r, 14); } catch (e) {}
+      }
       continue;
     }
 
@@ -941,10 +958,10 @@ function applyDBValidations_(sh) {
 
   sh.getRange(start, idx1_("Менеджер"), maxRows, 1).setDataValidation(dvList_(CFG.MANAGER_SHEETS, true));
   sh.getRange(start, idx1_("Проект"), maxRows, 1).setDataValidation(dvList_(CFG.PROJECTS, true));
-  sh.getRange(start, idx1_("Флоу контрагента"), maxRows, 1).setDataValidation(dvList_(CFG.COUNTERPARTY_FLOW_TYPES, false));
+  sh.getRange(start, idx1_("Флоу"), maxRows, 1).setDataValidation(dvList_(CFG.COUNTERPARTY_FLOW_TYPES, false));
   sh.getRange(start, idx1_("Статус"),  maxRows, 1).setDataValidation(dvList_(CFG.STATUSES, true));
   sh.getRange(start, idx1_("Оценка контрагента"), maxRows, 1).setDataValidation(dvList_(CFG.RATINGS, false));
-  sh.getRange(start, idx1_("Статус движения средств"), maxRows, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, true));
+  sh.getRange(start, idx1_("Статус денег"), maxRows, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, true));
 }
 
 /* ================= DB FORMATTING ================= */
@@ -1003,9 +1020,9 @@ function beautifyDB_(db) {
     .setWrap(true);
 
   db.getRange(bodyStart, idx1_("Баланс"), bodyRows, 1).setHorizontalAlignment("right");
-  db.getRange(bodyStart, idx1_("Отправлено на отыгрыш"), bodyRows, 1).setHorizontalAlignment("right");
+  db.getRange(bodyStart, idx1_("Отправлено"), bodyRows, 1).setHorizontalAlignment("right");
   db.getRange(bodyStart, idx1_("Готово к выводу"), bodyRows, 1).setHorizontalAlignment("right");
-  db.getRange(bodyStart, idx1_("Поставили на вывод"), bodyRows, 1).setHorizontalAlignment("right");
+  db.getRange(bodyStart, idx1_("На выводе"), bodyRows, 1).setHorizontalAlignment("right");
 
   db.getRange(bodyStart, idx1_("Статус"), bodyRows, 1).setFontWeight("bold");
 
@@ -1316,6 +1333,7 @@ function adminRestoreFormatActiveSheet() {
 
     try { sh.hideColumn(sh.getRange(1, 1)); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, 2)); } catch (e) {}
+    try { sh.hideColumn(sh.getRange(1, idx1_("Контрагент"))); } catch (e) {}
 
     applyManagerSheetFormatting_(sh);
     applyStatusConditionalFormatting_(sh);
@@ -1407,10 +1425,10 @@ function onEdit(e) {
   const colBalance = idx1_("Баланс");
   const colBalanceDate = idx1_("Дата баланса");
 
-  const colW1 = idx1_("Отправлено на отыгрыш");
+  const colW1 = idx1_("Отправлено");
   const colW2 = idx1_("Готово к выводу");
-  const colW3 = idx1_("Поставили на вывод");
-  const colMoney = idx1_("Статус движения средств");
+  const colW3 = idx1_("На выводе");
+  const colMoney = idx1_("Статус денег");
 
   const colUpdated = idx1_("Обновлено");
 
@@ -1492,10 +1510,10 @@ function repairTimestampsBySnapshot_() {
     const colId = 1;
     const colBalance = idx1_("Баланс");
     const colBalanceDate = idx1_("Дата баланса");
-    const colW1 = idx1_("Отправлено на отыгрыш");
+    const colW1 = idx1_("Отправлено");
     const colW2 = idx1_("Готово к выводу");
-    const colW3 = idx1_("Поставили на вывод");
-    const colMoney = idx1_("Статус движения средств");
+    const colW3 = idx1_("На выводе");
+    const colMoney = idx1_("Статус денег");
     const colUpdated = idx1_("Обновлено");
 
     const snapLastRow = snapSh.getLastRow();
