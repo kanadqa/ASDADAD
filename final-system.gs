@@ -259,6 +259,14 @@ function applyColumnWidths_(sh) {
   CFG.COL_WIDTHS.forEach((w, i) => sh.setColumnWidth(i + 1, w));
 }
 
+function trimExtraColumns_(sh, requiredCols) {
+  const need = Number(requiredCols || CFG.DB_HEADERS.length);
+  const max = sh.getMaxColumns();
+  if (max > need) {
+    sh.deleteColumns(need + 1, max - need);
+  }
+}
+
 function applyStandardFormats_(sh, startRow, rowCount) {
   if (!rowCount || rowCount <= 0) return;
 
@@ -326,6 +334,7 @@ function ensureDB_(ss) {
 
   db.clear();
   removeAllBandings_(db);
+  trimExtraColumns_(db, lastCol);
 
   // титул (только modern)
   applyTitleRow_(db);
@@ -378,6 +387,7 @@ function buildManagerSheets_(ss) {
 
     sh.clear();
     removeAllBandings_(sh);
+    trimExtraColumns_(sh, lastCol);
 
     // титул
     applyTitleRow_(sh);
@@ -800,6 +810,7 @@ function setManagerSheetDisplaySafely_(sh, display, lastCol) {
   // перерисовка -> глушим snapshot
   muteTimestampRepair_(CFG.TS_MUTE_SECONDS);
 
+  trimExtraColumns_(sh, lastCol);
   const maxClear = Math.max(display.length, sh.getLastRow() - (start - 1), 1);
   sh.getRange(start, 1, maxClear, lastCol).clearContent();
 
@@ -1312,6 +1323,7 @@ function adminRestoreFormatActiveSheet() {
 
   if (name === CFG.DB) {
     applyTitleRow_(sh);
+    trimExtraColumns_(sh, CFG.DB_HEADERS.length);
     applyColumnWidths_(sh);
     try { sh.setFrozenRows(layout.freezeRows); } catch (e) {}
     try { sh.setFrozenColumns(layout.freezeCols); } catch (e) {}
@@ -1328,6 +1340,7 @@ function adminRestoreFormatActiveSheet() {
   if (CFG.MANAGER_SHEETS.includes(name)) {
     applyTitleRow_(sh);
 
+    trimExtraColumns_(sh, CFG.DB_HEADERS.length);
     applyColumnWidths_(sh);
     try { sh.setFrozenRows(layout.freezeRows); } catch (e) {}
     try { sh.setFrozenColumns(layout.freezeCols); } catch (e) {}
