@@ -35,7 +35,7 @@ const CFG = {
   MONEY_FLOW_STATUSES: ["🟦 Отыгрывается","🟧 Выводится","🛑 Проиграно"],
 
   DB_HEADERS: [
-    "ID","Менеджер","Контрагент","Проект","Логин","Пароль","Ссылка",
+    "ID","Менеджер","Контрагент","Самообработка","Проект","Логин","Пароль","Ссылка",
     "Баланс","Дата баланса","Статус","Заметка",
     "Отправлено","Готово к выводу","На выводе",
     "Статус денег","Обновлено","Оценка контрагента"
@@ -49,8 +49,8 @@ const CFG = {
   BALANCE_DATETIME_FORMAT: "dd.MM.yyyy HH:mm:ss",
 
   COL_WIDTHS: [
-    100,140,200,135,190,130,170,105,145,150,
-    165,140,140,140,150,185,190
+    100,140,190,120,135,190,130,170,105,145,
+    150,165,140,140,140,150,185,190
   ],
 
   // сколько секунд "глушим" snapshot-ремонтёр после любой скриптовой перерисовки
@@ -395,6 +395,7 @@ function buildManagerSheets_(ss) {
     try { sh.hideColumn(sh.getRange(1, 1)); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, 2)); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, idx1_("Контрагент"))); } catch (e) {}
+    try { sh.hideColumn(sh.getRange(1, idx1_("Самообработка"))); } catch (e) {}
 
     applyManagerSheetFormatting_(sh);
     applyStatusConditionalFormatting_(sh);
@@ -411,6 +412,7 @@ function insertSampleData_(db) {
   r[idx0_("ID")] = nextRowId_();
   r[idx0_("Менеджер")] = CFG.MANAGER_SHEETS[0] || "Alpha";
   r[idx0_("Контрагент")] = "@example";
+  r[idx0_("Самообработка")] = "Да";
   r[idx0_("Проект")] = CFG.PROJECTS[0] || "1xBet";
   r[idx0_("Логин")] = "alpha@mail.com";
   r[idx0_("Пароль")] = "pass123";
@@ -564,11 +566,13 @@ function refreshManagerSheet_(ss, managerName, opts) {
 
   // build display with separators
   const display = [];
-  let prevWasLabel = false;
+  let prevCp = null;
 
   rows.forEach(r => {
     const cp = String(r[iCp] || "");
     const isNewBlock = !prevCp || cp !== prevCp;
+    const selfMark = String(r[idx0_("Самообработка")] || "").trim();
+    const withSelf = /^(да|yes|true|1|самообработка)$/i.test(selfMark);
     if (isNewBlock) {
       if (prevCp) {
         for (let i = 0; i < CFG.SEPARATOR_ROWS; i++) {
@@ -576,7 +580,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
         }
       }
       const label = new Array(lastCol).fill("");
-      label[idx0_("Проект")] = `Контрагент: ${cp}`;
+      label[idx0_("Проект")] = withSelf ? `Контрагент: ${cp} • Самообработка` : `Контрагент: ${cp}`;
       display.push(label);
     }
 
@@ -762,6 +766,7 @@ function applyManagerValidationsById_(sh, displayRowCount) {
   const ids = sh.getRange(start, colId, displayRowCount, 1).getValues();
 
   const projectDv = dvList_(CFG.PROJECTS, false);
+  const selfDv = dvList_(["", "Да"], false);
   const statusDv = dvList_(CFG.STATUSES, true);
   const ratingDv = dvList_(CFG.RATINGS, false);
   const moneyDv = dvList_(CFG.MONEY_FLOW_STATUSES, true);
@@ -771,6 +776,7 @@ function applyManagerValidationsById_(sh, displayRowCount) {
     const hasId = String(ids[i][0] || "").trim() !== "";
     if (!hasId) continue;
 
+    sh.getRange(row, idx1_("Самообработка")).setDataValidation(selfDv);
     sh.getRange(row, idx1_("Проект")).setDataValidation(projectDv);
     sh.getRange(row, idx1_("Статус")).setDataValidation(statusDv);
     sh.getRange(row, idx1_("Оценка контрагента")).setDataValidation(ratingDv);
@@ -842,11 +848,11 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
         sh.getRange(r, colProject)
           .setHorizontalAlignment("left")
           .setFontWeight("bold")
-          .setFontStyle("italic")
+          .setFontStyle("normal")
           .setFontSize(10)
           .setFontColor("#334155")
-          .setBackground("#f1f5f9");
-        try { sh.setRowHeight(r, 22); } catch (e) {}
+          .setBackground("#f8fafc");
+        try { sh.setRowHeight(r, 24); } catch (e) {}
       } else {
         sh.getRange(r, 1, 1, lastCol)
           .setBackground("#ffffff")
@@ -871,12 +877,12 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
     }
 
     if (isNewBlock) {
-      try { sh.setRowHeight(r, 34); } catch (e) {}
-      sh.getRange(r, 1, 1, lastCol).setBackground("#eef2f7");
+      try { sh.setRowHeight(r, 32); } catch (e) {}
+      sh.getRange(r, 1, 1, lastCol).setBackground("#ffffff");
       sh.getRange(r, colProject).setFontWeight("bold");
       sh.getRange(r, colStatus).setFontWeight("bold");
     } else {
-      try { sh.setRowHeight(r, 30); } catch (e) {}
+      try { sh.setRowHeight(r, 29); } catch (e) {}
     }
 
     prevWasLabel = false;
@@ -952,6 +958,7 @@ function applyDBValidations_(sh) {
   const maxRows = Math.max(1, sh.getMaxRows() - (start - 1));
 
   sh.getRange(start, idx1_("Менеджер"), maxRows, 1).setDataValidation(dvList_(CFG.MANAGER_SHEETS, true));
+  sh.getRange(start, idx1_("Самообработка"), maxRows, 1).setDataValidation(dvList_(["", "Да"], false));
   sh.getRange(start, idx1_("Проект"), maxRows, 1).setDataValidation(dvList_(CFG.PROJECTS, true));
   sh.getRange(start, idx1_("Статус"),  maxRows, 1).setDataValidation(dvList_(CFG.STATUSES, true));
   sh.getRange(start, idx1_("Оценка контрагента"), maxRows, 1).setDataValidation(dvList_(CFG.RATINGS, false));
@@ -1328,6 +1335,7 @@ function adminRestoreFormatActiveSheet() {
     try { sh.hideColumn(sh.getRange(1, 1)); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, 2)); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, idx1_("Контрагент"))); } catch (e) {}
+    try { sh.hideColumn(sh.getRange(1, idx1_("Самообработка"))); } catch (e) {}
 
     applyManagerSheetFormatting_(sh);
     applyStatusConditionalFormatting_(sh);
