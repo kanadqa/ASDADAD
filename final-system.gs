@@ -854,23 +854,27 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
       const labelText = String(sh.getRange(r, colProject).getValue() || "").trim();
       if (labelText) {
         try { sh.getRange(r, colProject, 1, Math.max(1, lastCol - colProject + 1)).breakApart(); } catch (e) {}
+
         sh.getRange(r, 1, 1, lastCol)
-          .setBackground("#eef2f7")
-          .setFontColor("#475569")
+          .setBackground("#f8fafc")
+          .setFontColor("#64748b")
           .setFontWeight("normal");
+
         sh.getRange(r, colProject)
           .setHorizontalAlignment("left")
           .setFontWeight("bold")
           .setFontSize(10)
           .setFontColor("#334155");
+
         try {
           sh.getRange(r, 1, 1, lastCol).setBorder(
-            true, null, true, null, null, null,
+            null, null, true, null, null, null,
             "#94a3b8",
             SpreadsheetApp.BorderStyle.SOLID_MEDIUM
           );
         } catch (e) {}
-        try { sh.setRowHeight(r, 23); } catch (e) {}
+
+        try { sh.setRowHeight(r, 24); } catch (e) {}
       } else {
         sh.getRange(r, 1, 1, lastCol)
           .setBackground("#ffffff")
@@ -882,26 +886,19 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
       continue;
     }
 
-    const isNewBlock = prevWasLabel;
+    const isFirstAfterLabel = prevWasLabel;
 
-    // Статичный "focus-like" guide для всех строк данных.
     try {
       sh.getRange(r, 1, 1, lastCol).setBorder(
-        true, null, true, null, null, null,
-        "#cbd5e1",
+        null, null, true, null, null, null,
+        "#e2e8f0",
         SpreadsheetApp.BorderStyle.SOLID
       );
     } catch (e) {}
 
-    if (isNewBlock) {
-      try {
-        sh.getRange(r, 1, 1, lastCol).setBorder(
-          true, null, true, null, null, null,
-          "#64748b",
-          SpreadsheetApp.BorderStyle.SOLID_MEDIUM
-        );
-      } catch (e) {}
+    if (isFirstAfterLabel) {
       try { sh.setRowHeight(r, 31); } catch (e) {}
+      sh.getRange(r, 1, 1, lastCol).setBackground("#f9fafb");
       sh.getRange(r, colProject).setFontWeight("bold");
       sh.getRange(r, colStatus).setFontWeight("bold");
     } else {
