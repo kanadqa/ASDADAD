@@ -774,21 +774,6 @@ function pushManagerEditsToDB_(ss, managerName) {
 
     r[iManager] = managerName;
 
-    const project = String(r[idx0_("Проект")] || "").trim();
-    if (!CFG.PROJECTS.includes(project)) { skipped++; continue; }
-
-    const status = String(r[idx0_("Статус")] || "").trim();
-    if (!CFG.STATUSES.includes(status)) { skipped++; continue; }
-
-    const moneyStatus = String(r[idx0_("Статус денег")] || "").trim();
-    if (moneyStatus && !CFG.MONEY_FLOW_STATUSES.includes(moneyStatus)) { skipped++; continue; }
-
-    const selfMark = String(r[idx0_("Самообработка")] || "").trim();
-    if (selfMark && selfMark !== "Да") { skipped++; continue; }
-
-    const rating = String(r[iRating] || "").trim();
-    if (rating && !CFG.RATINGS.includes(rating)) { skipped++; continue; }
-
     updates.push({ sheetRow: hit.sheetRow, rowValues: r });
   }
 
@@ -1099,7 +1084,7 @@ function applyDBValidations_(sh) {
 
   sh.getRange(start, idx1_("Менеджер"), maxRows, 1).setDataValidation(dvList_(CFG.MANAGER_SHEETS, true));
   sh.getRange(start, idx1_("Самообработка"), maxRows, 1).setDataValidation(dvList_(["", "Да"], false));
-  sh.getRange(start, idx1_("Проект"), maxRows, 1).setDataValidation(dvList_(CFG.PROJECTS, true));
+  sh.getRange(start, idx1_("Проект"), maxRows, 1).setDataValidation(dvList_(CFG.PROJECTS, false));
   sh.getRange(start, idx1_("Статус"),  maxRows, 1).setDataValidation(dvList_(CFG.STATUSES, true));
   sh.getRange(start, idx1_("Оценка контрагента"), maxRows, 1).setDataValidation(dvList_(CFG.RATINGS, false));
   sh.getRange(start, idx1_("Статус денег"), maxRows, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, true));
