@@ -187,7 +187,8 @@ function onOpen() {
     .addItem("АДМИН: Построить систему (АКТУАЛЬНЫЙ формат)", "adminBuildSystemModern")
     .addItem("АДМИН: Построить систему (СТАРЫЙ формат)", "adminBuildSystemLegacy")
     .addSeparator()
-    .addItem("Менеджер: Отправить данные в БД + перерисовать лист", "managerRefreshMyData")
+    .addItem("Менеджер: Отправить данные в БД", "managerPushMyDataToDB")
+    .addItem("Менеджер: Перерисовать лист из БД", "managerRedrawMySheet")
     .addSeparator()
     .addItem("АДМИН: Отправить данные в БД всех менеджеров", "adminCollectAllManagers")
     .addSeparator()
@@ -473,7 +474,7 @@ function insertSampleData_(db) {
 
 /* ================= MANAGER ACTION ================= */
 
-function managerRefreshMyData() {
+function managerPushMyDataToDB() {
   const ss = SpreadsheetApp.getActive();
   const sh = ss.getActiveSheet();
   const managerName = sh.getName();
@@ -490,24 +491,54 @@ function managerRefreshMyData() {
   }
 
   try {
-    // на время перерисовки "глушим" snapshot
     muteTimestampRepair_(CFG.TS_MUTE_SECONDS);
 
     withSpreadsheetRetry_(() => sanitizeCounterpartyNicksInDB_(ss), 4);
     const res = withSpreadsheetRetry_(() => pushManagerEditsToDB_(ss, managerName), 4);
-    withSpreadsheetRetry_(() => refreshManagerSheet_(ss, managerName), 4);
 
     SpreadsheetApp.getUi().alert(
       `Готово ✅
-Обновлено в БД: ${res.updated}
-Пропущено: ${res.skipped}
-
-` +
-      `Дата баланса / Обновлено не меняются из-за перерисовки.`
+Данные отправлены в БД.
+Обновлено: ${res.updated}
+Пропущено: ${res.skipped}`
     );
   } finally {
     lock.releaseLock();
   }
+}
+
+function managerRedrawMySheet() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getActiveSheet();
+  const managerName = sh.getName();
+
+  if (!isManagerSheetName_(managerName)) {
+    SpreadsheetApp.getUi().alert("Открой лист менеджера.");
+    return;
+  }
+
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) {
+    SpreadsheetApp.getUi().alert("⏳ Уже выполняется.");
+    return;
+  }
+
+  try {
+    muteTimestampRepair_(CFG.TS_MUTE_SECONDS);
+
+    withSpreadsheetRetry_(() => sanitizeCounterpartyNicksInDB_(ss), 4);
+    withSpreadsheetRetry_(() => refreshManagerSheet_(ss, managerName), 4);
+
+    SpreadsheetApp.getUi().alert("Готово ✅ Лист перерисован из БД.");
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// backward compatibility: old menu handler
+function managerRefreshMyData() {
+  managerPushMyDataToDB();
+  managerRedrawMySheet();
 }
 
 /* ================= ADMIN COLLECT ================= */
@@ -850,7 +881,9 @@ function setManagerSheetDisplaySafely_(sh, display, lastCol) {
 
   trimExtraColumns_(sh, lastCol);
   const maxClear = Math.max(display.length, sh.getLastRow() - (start - 1), 1);
-  sh.getRange(start, 1, maxClear, lastCol).clearContent();
+  const area = sh.getRange(start, 1, maxClear, lastCol);
+  area.clearContent();
+  area.clearFormat();
 
   // титул (если modern)
   applyTitleRow_(sh);
@@ -915,7 +948,7 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
         try { sh.setRowHeight(r, 24); } catch (e) {}
       } else {
         sh.getRange(r, 1, 1, lastCol)
-          .setBackground("#ffffff")
+          .setBackground("#f8fafc")
           .setFontColor("#ffffff")
           .setFontWeight("normal");
         try { sh.setRowHeight(r, 18); } catch (e) {}
@@ -1232,13 +1265,10 @@ function applyManagerSheetFormatting_(sh) {
       .setFontSize(10)
       .setVerticalAlignment("middle")
       .setFontColor("#111827")
-      .setBackground("#ffffff")
+      .setBackground("#f8fafc")
       .setWrap(false)
       .setHorizontalAlignment("center");
 
-    // Правая часть таблицы — мягкий фон для лучшей читаемости больших массивов.
-    sh.getRange(layout.startRow, colNote, bodyRows, lastCol - colNote + 1)
-      .setBackground("#f8fafc");
 
     sh.getRange(layout.startRow, colPassword, bodyRows, 1).setHorizontalAlignment("left");
     sh.getRange(layout.startRow, colNote, bodyRows, 1)
