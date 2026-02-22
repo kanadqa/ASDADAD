@@ -580,7 +580,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
         }
       }
       const label = new Array(lastCol).fill("");
-      label[idx0_("Проект")] = flow ? `${cp} • ${flow}` : cp;
+      label[idx0_("Флоу")] = flow ? `${cp} • ${flow}` : cp;
       display.push(label);
     }
 
@@ -595,7 +595,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
     }
 
     // Данные уровня контрагента показываем только в объединённой строке над блоком.
-    out[iCp] = isNewBlock ? out[iCp] : "";
+    out[iCp] = "";
     out[iFlow] = "";
     out[idx0_("Оценка контрагента")] = "";
 
@@ -773,12 +773,26 @@ function applyManagerValidationsById_(sh, displayRowCount) {
   if (displayRowCount <= 0) return;
 
   const start = startRow_();
+  const colId = idx1_("ID");
+  const ids = sh.getRange(start, colId, displayRowCount, 1).getValues();
 
-  sh.getRange(start, idx1_("Проект"), displayRowCount, 1).setDataValidation(dvList_(CFG.PROJECTS, false));
-  sh.getRange(start, idx1_("Флоу"), displayRowCount, 1).setDataValidation(dvList_(CFG.COUNTERPARTY_FLOW_TYPES, false));
-  sh.getRange(start, idx1_("Статус"), displayRowCount, 1).setDataValidation(dvList_(CFG.STATUSES, true));
-  sh.getRange(start, idx1_("Оценка контрагента"), displayRowCount, 1).setDataValidation(dvList_(CFG.RATINGS, false));
-  sh.getRange(start, idx1_("Статус денег"), displayRowCount, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, true));
+  const projectDv = dvList_(CFG.PROJECTS, false);
+  const flowDv = dvList_(CFG.COUNTERPARTY_FLOW_TYPES, false);
+  const statusDv = dvList_(CFG.STATUSES, true);
+  const ratingDv = dvList_(CFG.RATINGS, false);
+  const moneyDv = dvList_(CFG.MONEY_FLOW_STATUSES, true);
+
+  for (let i = 0; i < displayRowCount; i++) {
+    const row = start + i;
+    const hasId = String(ids[i][0] || "").trim() !== "";
+    if (!hasId) continue;
+
+    sh.getRange(row, idx1_("Проект")).setDataValidation(projectDv);
+    sh.getRange(row, idx1_("Флоу")).setDataValidation(flowDv);
+    sh.getRange(row, idx1_("Статус")).setDataValidation(statusDv);
+    sh.getRange(row, idx1_("Оценка контрагента")).setDataValidation(ratingDv);
+    sh.getRange(row, idx1_("Статус денег")).setDataValidation(moneyDv);
+  }
 }
 
 /* ================= TABLE DRAW HELPERS ================= */
@@ -841,22 +855,24 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
     const cp = String(cps[i][0] || "").trim();
 
     if (!id) {
-      const labelText = String(sh.getRange(r, colProject).getValue() || "").trim();
+      const labelText = String(sh.getRange(r, colFlow).getValue() || "").trim();
       if (labelText) {
-        try { sh.getRange(r, colProject, 1, Math.max(1, colStatus - colProject + 1)).breakApart(); } catch (e) {}
-        try { sh.getRange(r, colProject, 1, Math.max(1, colStatus - colProject + 1)).merge(); } catch (e) {}
-        sh.getRange(r, colProject)
+        const mergeCols = Math.max(1, lastCol - colFlow + 1);
+        try { sh.getRange(r, colFlow, 1, mergeCols).breakApart(); } catch (e) {}
+        try { sh.getRange(r, colFlow, 1, mergeCols).merge(); } catch (e) {}
+        sh.getRange(r, colFlow)
           .setHorizontalAlignment("left")
           .setFontWeight("bold")
-          .setFontColor("#1f2937")
-          .setBackground("#e5e7eb");
-        try { sh.setRowHeight(r, 24); } catch (e) {}
+          .setFontSize(11)
+          .setFontColor("#111827")
+          .setBackground("#e2e8f0");
+        try { sh.setRowHeight(r, 26); } catch (e) {}
       } else {
         sh.getRange(r, 1, 1, lastCol)
           .setBackground("#ffffff")
           .setFontColor("#ffffff")
           .setFontWeight("normal");
-        try { sh.setRowHeight(r, 14); } catch (e) {}
+        try { sh.setRowHeight(r, 10); } catch (e) {}
       }
       continue;
     }
@@ -874,14 +890,14 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
     }
 
     if (isNewBlock) {
-      try { sh.setRowHeight(r, 38); } catch (e) {}
+      try { sh.setRowHeight(r, 34); } catch (e) {}
       sh.getRange(r, 1, 1, lastCol).setBackground("#eef2f7");
       sh.getRange(r, colCp).setFontWeight("bold");
       sh.getRange(r, colFlow).setFontWeight("bold");
       sh.getRange(r, colProject).setFontWeight("bold");
       sh.getRange(r, colStatus).setFontWeight("bold");
     } else {
-      try { sh.setRowHeight(r, 32); } catch (e) {}
+      try { sh.setRowHeight(r, 30); } catch (e) {}
     }
 
     if (cp) prevCp = cp;
