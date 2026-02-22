@@ -1519,8 +1519,11 @@ function clearSelectionMarker_(ss) {
   if (!sh) return;
 
   const colProject = idx1_("Проект");
+  const lastCol = CFG.DB_HEADERS.length;
   try {
-    sh.getRange(row, colProject, 1, 1).setBorder(null, false, null, null, null, null);
+    sh.getRange(row, colProject, 1, Math.max(1, lastCol - colProject + 1)).setBorder(
+      false, null, false, null, null, null
+    );
   } catch (e) {}
 
   props.deleteProperty(SELECTION_MARKER_KEY);
@@ -1528,11 +1531,12 @@ function clearSelectionMarker_(ss) {
 
 function setSelectionMarker_(sh, row) {
   const colProject = idx1_("Проект");
+  const lastCol = CFG.DB_HEADERS.length;
   try {
-    sh.getRange(row, colProject, 1, 1).setBorder(
-      null, true, null, null, null, null,
+    sh.getRange(row, colProject, 1, Math.max(1, lastCol - colProject + 1)).setBorder(
+      true, null, true, null, null, null,
       "#2563eb",
-      SpreadsheetApp.BorderStyle.SOLID_THICK
+      SpreadsheetApp.BorderStyle.SOLID_MEDIUM
     );
   } catch (e) {}
 }
