@@ -151,6 +151,34 @@ function isTimestampRepairMuted_() {
   return Date.now() < until;
 }
 
+
+/* ================= GLOBAL DATA SANITIZER ================= */
+
+function sanitizeCounterpartyNicksInDB_(ss) {
+  const layout = getLayout_();
+  const db = getSheetOrThrow_(ss || SpreadsheetApp.getActive(), CFG.DB);
+  const lastRow = db.getLastRow();
+  if (lastRow < layout.startRow) return 0;
+
+  const rows = lastRow - layout.startRow + 1;
+  const colCp = idx1_("Контрагент");
+  const rg = db.getRange(layout.startRow, colCp, rows, 1);
+  const vals = rg.getValues();
+
+  let changed = 0;
+  for (let i = 0; i < vals.length; i++) {
+    const raw = vals[i][0];
+    const trimmed = normalizeText_(raw);
+    if (String(raw ?? "") !== trimmed) {
+      vals[i][0] = trimmed;
+      changed++;
+    }
+  }
+
+  if (changed > 0) rg.setValues(vals);
+  return changed;
+}
+
 /* ================= MENU ================= */
 
 function onOpen() {
@@ -207,6 +235,7 @@ function buildSystem_(ss) {
   muteTimestampRepair_(CFG.TS_MUTE_SECONDS);
 
   ensureDB_(ss);
+  sanitizeCounterpartyNicksInDB_(ss);
   buildManagerSheets_(ss);
 
   const db = getSheetOrThrow_(ss, CFG.DB);
@@ -464,6 +493,7 @@ function managerRefreshMyData() {
     // на время перерисовки "глушим" snapshot
     muteTimestampRepair_(CFG.TS_MUTE_SECONDS);
 
+    withSpreadsheetRetry_(() => sanitizeCounterpartyNicksInDB_(ss), 4);
     const res = withSpreadsheetRetry_(() => pushManagerEditsToDB_(ss, managerName), 4);
     withSpreadsheetRetry_(() => refreshManagerSheet_(ss, managerName), 4);
 
@@ -490,6 +520,8 @@ function adminCollectAllManagers() {
   let totalUpdated = 0, totalSkipped = 0;
 
   try {
+    withSpreadsheetRetry_(() => sanitizeCounterpartyNicksInDB_(ss), 4);
+
     CFG.MANAGER_SHEETS.forEach(m => {
       const res = withSpreadsheetRetry_(() => pushManagerEditsToDB_(ss, m), 4);
       totalUpdated += res.updated;
@@ -753,6 +785,7 @@ function adminExportDBToAllManagers() {
     // выгрузка = массовая перерисовка -> глушим snapshot, чтобы не менять даты
     muteTimestampRepair_(CFG.TS_MUTE_SECONDS);
 
+    withSpreadsheetRetry_(() => sanitizeCounterpartyNicksInDB_(ss), 4);
     CFG.MANAGER_SHEETS.forEach(name => {
       withSpreadsheetRetry_(() => refreshManagerSheet_(ss, name, { includeHiddenStatuses: true }), 4);
     });
