@@ -165,6 +165,7 @@ function onOpen() {
     .addSeparator()
     .addItem("АДМИН: Защитить ID", "protectIdColumns_")
     .addItem("АДМИН: Включить ремонтёр snapshot", "setupSnapshotRepairTrigger_")
+    .addItem("АДМИН: Включить focus-маркер строки", "setupSelectionFocusTrigger_")
     .addSeparator()
     .addItem("АДМИН: Проставить ID пустым строкам в БД", "adminFillMissingIdsInDB")
     .addItem("АДМИН: Восстановить формат текущего листа", "adminRestoreFormatActiveSheet")
@@ -1519,11 +1520,18 @@ function clearSelectionMarker_(ss) {
   if (!sh) return;
 
   const colProject = idx1_("Проект");
+  const colNote = idx1_("Заметка");
   const lastCol = CFG.DB_HEADERS.length;
+  const leftCols = Math.max(1, colNote - colProject);
+  const rightCols = Math.max(1, lastCol - colNote + 1);
+
   try {
-    sh.getRange(row, colProject, 1, Math.max(1, lastCol - colProject + 1)).setBorder(
-      false, null, false, null, null, null
-    );
+    sh.getRange(row, colProject, 1, leftCols)
+      .setBackground("#ffffff")
+      .setBorder(false, false, false, false, false, false);
+    sh.getRange(row, colNote, 1, rightCols)
+      .setBackground("#f8fafc")
+      .setBorder(false, false, false, false, false, false);
   } catch (e) {}
 
   props.deleteProperty(SELECTION_MARKER_KEY);
@@ -1531,13 +1539,18 @@ function clearSelectionMarker_(ss) {
 
 function setSelectionMarker_(sh, row) {
   const colProject = idx1_("Проект");
+  const colNote = idx1_("Заметка");
   const lastCol = CFG.DB_HEADERS.length;
+  const leftCols = Math.max(1, colNote - colProject);
+  const rightCols = Math.max(1, lastCol - colNote + 1);
+
   try {
-    sh.getRange(row, colProject, 1, Math.max(1, lastCol - colProject + 1)).setBorder(
-      true, null, true, null, null, null,
-      "#2563eb",
-      SpreadsheetApp.BorderStyle.SOLID_MEDIUM
-    );
+    sh.getRange(row, colProject, 1, leftCols)
+      .setBackground("#e0f2fe")
+      .setBorder(true, true, true, true, false, false, "#0284c7", SpreadsheetApp.BorderStyle.SOLID);
+    sh.getRange(row, colNote, 1, rightCols)
+      .setBackground("#dbeafe")
+      .setBorder(true, false, true, true, false, false, "#0284c7", SpreadsheetApp.BorderStyle.SOLID);
   } catch (e) {}
 }
 
@@ -1694,6 +1707,26 @@ function repairTimestampsBySnapshot_() {
   } finally {
     try { lock.releaseLock(); } catch (e) {}
   }
+}
+
+
+function setupSelectionFocusTrigger_() {
+  const ss = SpreadsheetApp.getActive();
+
+  ScriptApp.getProjectTriggers().forEach(t => {
+    try {
+      if (t.getHandlerFunction && t.getHandlerFunction() === "onSelectionChange") {
+        ScriptApp.deleteTrigger(t);
+      }
+    } catch (e) {}
+  });
+
+  ScriptApp.newTrigger("onSelectionChange")
+    .forSpreadsheet(ss)
+    .onSelectionChange()
+    .create();
+
+  SpreadsheetApp.getUi().alert("Готово ✅ Focus-маркер строки включен.");
 }
 
 // ✅ Публичные обёртки (чтобы были видны в списке триггеров)
