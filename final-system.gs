@@ -774,6 +774,18 @@ function pushManagerEditsToDB_(ss, managerName) {
 
     r[iManager] = managerName;
 
+    const project = String(r[idx0_("Проект")] || "").trim();
+    if (!CFG.PROJECTS.includes(project)) { skipped++; continue; }
+
+    const status = String(r[idx0_("Статус")] || "").trim();
+    if (!CFG.STATUSES.includes(status)) { skipped++; continue; }
+
+    const moneyStatus = String(r[idx0_("Статус денег")] || "").trim();
+    if (moneyStatus && !CFG.MONEY_FLOW_STATUSES.includes(moneyStatus)) { skipped++; continue; }
+
+    const selfMark = String(r[idx0_("Самообработка")] || "").trim();
+    if (selfMark && selfMark !== "Да") { skipped++; continue; }
+
     const rating = String(r[iRating] || "").trim();
     if (rating && !CFG.RATINGS.includes(rating)) { skipped++; continue; }
 
