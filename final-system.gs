@@ -855,8 +855,8 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
       if (labelText) {
         try { sh.getRange(r, colProject, 1, Math.max(1, lastCol - colProject + 1)).breakApart(); } catch (e) {}
         sh.getRange(r, 1, 1, lastCol)
-          .setBackground("#f3f4f6")
-          .setFontColor("#6b7280")
+          .setBackground("#eef2f7")
+          .setFontColor("#475569")
           .setFontWeight("normal");
         sh.getRange(r, colProject)
           .setHorizontalAlignment("left")
@@ -866,8 +866,8 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
         try {
           sh.getRange(r, 1, 1, lastCol).setBorder(
             true, null, true, null, null, null,
-            "#cbd5e1",
-            SpreadsheetApp.BorderStyle.SOLID
+            "#94a3b8",
+            SpreadsheetApp.BorderStyle.SOLID_MEDIUM
           );
         } catch (e) {}
         try { sh.setRowHeight(r, 23); } catch (e) {}
@@ -884,7 +884,23 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
 
     const isNewBlock = prevWasLabel;
 
+    // Статичный "focus-like" guide для всех строк данных.
+    try {
+      sh.getRange(r, 1, 1, lastCol).setBorder(
+        true, null, true, null, null, null,
+        "#cbd5e1",
+        SpreadsheetApp.BorderStyle.SOLID
+      );
+    } catch (e) {}
+
     if (isNewBlock) {
+      try {
+        sh.getRange(r, 1, 1, lastCol).setBorder(
+          true, null, true, null, null, null,
+          "#64748b",
+          SpreadsheetApp.BorderStyle.SOLID_MEDIUM
+        );
+      } catch (e) {}
       try { sh.setRowHeight(r, 31); } catch (e) {}
       sh.getRange(r, colProject).setFontWeight("bold");
       sh.getRange(r, colStatus).setFontWeight("bold");
@@ -1408,40 +1424,6 @@ function protectIdColumns_() {
   SpreadsheetApp.getUi().alert("Готово ✅ Колонка ID защищена (только тело таблицы).");
 }
 
-/* ================= onSelectionChange (focus marker) =================
-   Лёгкий focus-маркер строки на листах менеджеров, чтобы не путаться.
-*/
-
-function onSelectionChange(e) {
-  if (!e || !e.range) return;
-
-  const ss = SpreadsheetApp.getActive();
-  const sh = e.range.getSheet();
-  const sheetName = sh.getName();
-  const isManager = CFG.MANAGER_SHEETS.includes(sheetName);
-
-  const props = PropertiesService.getDocumentProperties();
-  const prevRaw = String(props.getProperty(SELECTION_MARKER_KEY) || "");
-
-  const layout = getLayout_();
-  const row = e.range.getRow();
-  const isSingleRow = e.range.getNumRows() === 1;
-  const inDataArea = row >= layout.startRow;
-
-  const currentKey = `${sheetName}||${row}`;
-  if (isManager && isSingleRow && inDataArea && prevRaw === currentKey) return;
-
-  // Снимаем старый маркер только если он действительно был.
-  if (prevRaw) clearSelectionMarker_(ss, prevRaw);
-  if (!isManager || !isSingleRow || !inDataArea) return;
-
-  const id = String(sh.getRange(row, idx1_("ID"), 1, 1).getValue() || "").trim();
-  if (!id) return; // заголовки блоков/пустые строки не подсвечиваем
-
-  setSelectionMarker_(sh, row);
-  props.setProperty(SELECTION_MARKER_KEY, currentKey);
-}
-
 /* ================= onEdit (timestamps) =================
    ЖЕЛЕЗНО: работаем ТОЛЬКО на листах менеджеров.
    В БД ничего не автопроставляем.
@@ -1509,45 +1491,6 @@ function onEdit(e) {
      но обновляет baseline snapshot, чтобы потом не "догонял" и не менял даты.
 */
 
-
-const SELECTION_MARKER_KEY = "SYS_SELECTION_MARKER";
-
-function clearSelectionMarker_(ss, rawKey) {
-  const props = PropertiesService.getDocumentProperties();
-  const raw = String(rawKey || props.getProperty(SELECTION_MARKER_KEY) || "");
-  if (!raw) return;
-
-  const [sheetName, rowStr] = raw.split("||");
-  const row = Number(rowStr || "0");
-  if (!sheetName || !row) return;
-
-  const sh = ss.getSheetByName(sheetName);
-  if (!sh) return;
-
-  const colProject = idx1_("Проект");
-  const lastCol = CFG.DB_HEADERS.length;
-
-  try {
-    sh.getRange(row, colProject, 1, Math.max(1, lastCol - colProject + 1)).setBorder(
-      false, false, false, false, false, false
-    );
-  } catch (e) {}
-
-  props.deleteProperty(SELECTION_MARKER_KEY);
-}
-
-function setSelectionMarker_(sh, row) {
-  const colProject = idx1_("Проект");
-  const lastCol = CFG.DB_HEADERS.length;
-
-  try {
-    sh.getRange(row, colProject, 1, Math.max(1, lastCol - colProject + 1)).setBorder(
-      true, false, true, false, false, false,
-      "#94a3b8",
-      SpreadsheetApp.BorderStyle.SOLID
-    );
-  } catch (e) {}
-}
 
 const SNAPSHOT_SHEET = "_SNAPSHOT";
 
@@ -1704,13 +1647,6 @@ function repairTimestampsBySnapshot_() {
   }
 }
 
-
-function setupSelectionFocusTrigger_() {
-  SpreadsheetApp.getUi().alert(
-    "Focus-маркер работает как простой триггер onSelectionChange и не требует установки через ScriptApp.\n" +
-    "Просто обнови страницу таблицы и кликай по строкам с ID на листах менеджеров."
-  );
-}
 
 // ✅ Публичные обёртки (чтобы были видны в списке триггеров)
 function setupSnapshotRepairTrigger() {
