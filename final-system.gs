@@ -43,7 +43,7 @@ const CFG = {
 
   CREATOR_NICK: "Khan",
 
-  SEPARATOR_ROWS: 1,
+  SEPARATOR_ROWS: 3,
   PRETTY_ROWS_LIMIT: 1000,
 
   BALANCE_DATETIME_FORMAT: "dd.MM.yyyy HH:mm:ss",
@@ -284,7 +284,7 @@ function applyTitleRow_(sh) {
   if (!useTitle_()) return; // legacy: без титула
 
   const lastCol = CFG.DB_HEADERS.length;
-  const title = "Система БД • by " + CFG.CREATOR_NICK;
+  const title = "БД • by " + CFG.CREATOR_NICK;
 
   // 1) Снимаем любые старые merge в первой строке и чистим контент
   const full = sh.getRange(1, 1, 1, lastCol);
@@ -880,7 +880,7 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
           .setBackground("#ffffff")
           .setFontColor("#ffffff")
           .setFontWeight("normal");
-        try { sh.setRowHeight(r, 8); } catch (e) {}
+        try { sh.setRowHeight(r, 18); } catch (e) {}
       }
       prevWasLabel = true;
       continue;
@@ -1038,7 +1038,8 @@ function beautifyDB_(db) {
 
   db.getRange(bodyStart, idx1_("Заметка"), bodyRows, 1)
     .setHorizontalAlignment("left")
-    .setWrap(true);
+    .setWrap(false)
+    .setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 
   db.getRange(bodyStart, idx1_("Баланс"), bodyRows, 1).setHorizontalAlignment("right");
   db.getRange(bodyStart, idx1_("Отправлено"), bodyRows, 1).setHorizontalAlignment("right");
@@ -1202,7 +1203,10 @@ function applyManagerSheetFormatting_(sh) {
       .setBackground("#f8fafc");
 
     sh.getRange(layout.startRow, colPassword, bodyRows, 1).setHorizontalAlignment("left");
-    sh.getRange(layout.startRow, colNote, bodyRows, 1).setHorizontalAlignment("left").setWrap(true);
+    sh.getRange(layout.startRow, colNote, bodyRows, 1)
+      .setHorizontalAlignment("left")
+      .setWrap(false)
+      .setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 
     sh.getRange(layout.startRow, colLink, bodyRows, 1)
       .setHorizontalAlignment("left")
