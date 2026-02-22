@@ -593,7 +593,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
   const iStatus  = idx0_("Статус");
   const iCp      = idx0_("Контрагент");
   const iProject = idx0_("Проект");
-  const iLabelRating = idx0_("Логин");
+  const iLabelRating = idx0_("Пароль");
   const iId      = idx0_("ID");
   const iRating  = idx0_("Оценка контрагента");
 
@@ -754,7 +754,7 @@ function pushManagerEditsToDB_(ss, managerName) {
       const m = labelText.match(/^Контрагент:\s*(.+?)(?:\s*[·•]\s*Самообработка)?$/i);
       if (m && m[1]) {
         currentCounterparty = String(m[1]).trim();
-        const labelRating = String(r[idx0_("Логин")] || "").trim();
+        const labelRating = String(r[idx0_("Пароль")] || "").trim();
         currentRating = CFG.RATINGS.includes(labelRating) ? labelRating : "";
       }
       skipped++;
@@ -875,7 +875,7 @@ function applyCounterpartyRatingValidations_(sh, displayRowCount) {
   const start = startRow_();
   const colId = idx1_("ID");
   const colProject = idx1_("Проект");
-  const colLabelRating = idx1_("Логин");
+  const colLabelRating = idx1_("Пароль");
 
   const ids = sh.getRange(start, colId, displayRowCount, 1).getValues();
   const labels = sh.getRange(start, colProject, displayRowCount, 1).getValues();
@@ -938,7 +938,7 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
   const colId = 1;
   const colProject = idx1_("Проект");
   const colStatus = idx1_("Статус");
-  const colLabelRating = idx1_("Логин");
+  const colLabelRating = idx1_("Пароль");
 
   const ids = sh.getRange(start, colId, displayRowCount, 1).getValues();
 
