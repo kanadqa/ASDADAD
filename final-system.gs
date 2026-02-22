@@ -704,6 +704,11 @@ function refreshManagerSheet_(ss, managerName, opts) {
 
 /* ================= PUSH MANAGER -> DB ================= */
 
+function isMeaningfulManagerDataRow_(r) {
+  const keys = ["Проект", "Логин", "Пароль", "Ссылка", "Баланс", "Статус", "Заметка", "Отправлено", "Готово к выводу", "На выводе", "Статус денег"];
+  return keys.some(k => String(r[idx0_(k)] || "").trim() !== "");
+}
+
 function pushManagerEditsToDB_(ss, managerName) {
   const layout = getLayout_();
 
@@ -743,11 +748,14 @@ function pushManagerEditsToDB_(ss, managerName) {
   let skipped = 0;
 
   const updates = [];
+  const inserts = [];
+  const managerIdWrites = [];
 
   let currentCounterparty = "";
   let currentRating = "";
 
-  for (const r of rows) {
+  for (let rowOffset = 0; rowOffset < rows.length; rowOffset++) {
+    const r = rows[rowOffset];
     const id = String(r[iId] || "").trim();
     if (!id) {
       const labelText = String(r[iProject] || "").trim();
@@ -756,8 +764,29 @@ function pushManagerEditsToDB_(ss, managerName) {
         currentCounterparty = String(m[1]).trim();
         const labelRating = String(r[idx0_("Пароль")] || "").trim();
         currentRating = CFG.RATINGS.includes(labelRating) ? labelRating : "";
+        skipped++;
+        continue;
       }
-      skipped++;
+
+      if (!isMeaningfulManagerDataRow_(r)) {
+        skipped++;
+        continue;
+      }
+
+      const newId = nextRowId_();
+      r[iId] = newId;
+      r[iManager] = managerName;
+
+      const cpNew = String(r[iCp] || "").trim();
+      if (cpNew) currentCounterparty = cpNew;
+      else if (currentCounterparty) r[iCp] = currentCounterparty;
+
+      const ratingNew = String(r[iRating] || "").trim();
+      if (ratingNew) currentRating = ratingNew;
+      else if (currentRating) r[iRating] = currentRating;
+
+      inserts.push(r.slice());
+      managerIdWrites.push({ row: start + rowOffset, id: newId });
       continue;
     }
 
@@ -796,9 +825,23 @@ function pushManagerEditsToDB_(ss, managerName) {
     i = j + 1;
   }
 
+  if (inserts.length > 0) {
+    const appendStart = Math.max(layout.startRow, db.getLastRow() + 1);
+    db.getRange(appendStart, 1, inserts.length, lastCol).setValues(inserts);
+    updated += inserts.length;
+  }
+
+  if (managerIdWrites.length > 0) {
+    managerIdWrites.forEach(w => {
+      sh.getRange(w.row, idx1_("ID")).setValue(w.id);
+      sh.getRange(w.row, idx1_("Менеджер")).setValue(managerName);
+    });
+  }
+
   if (updated > 0) {
     const colUpdated = idx1_("Обновлено");
-    const bodyRows = Math.max(1, dbLastRow - (layout.startRow - 1));
+    const finalLastRow = db.getLastRow();
+    const bodyRows = Math.max(1, finalLastRow - (layout.startRow - 1));
     db.getRange(layout.startRow, colUpdated, bodyRows, 1).setNumberFormat("dd.MM.yyyy HH:mm:ss");
   }
 
@@ -1085,9 +1128,9 @@ function applyDBValidations_(sh) {
   sh.getRange(start, idx1_("Менеджер"), maxRows, 1).setDataValidation(dvList_(CFG.MANAGER_SHEETS, true));
   sh.getRange(start, idx1_("Самообработка"), maxRows, 1).setDataValidation(dvList_(["", "Да"], false));
   sh.getRange(start, idx1_("Проект"), maxRows, 1).setDataValidation(dvList_(CFG.PROJECTS, false));
-  sh.getRange(start, idx1_("Статус"),  maxRows, 1).setDataValidation(dvList_(CFG.STATUSES, true));
+  sh.getRange(start, idx1_("Статус"),  maxRows, 1).setDataValidation(dvList_(CFG.STATUSES, false));
   sh.getRange(start, idx1_("Оценка контрагента"), maxRows, 1).setDataValidation(dvList_(CFG.RATINGS, false));
-  sh.getRange(start, idx1_("Статус денег"), maxRows, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, true));
+  sh.getRange(start, idx1_("Статус денег"), maxRows, 1).setDataValidation(dvList_(CFG.MONEY_FLOW_STATUSES, false));
 }
 
 /* ================= DB FORMATTING ================= */
