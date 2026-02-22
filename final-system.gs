@@ -668,6 +668,7 @@ function pushManagerEditsToDB_(ss, managerName) {
   const iId      = idx0_("ID");
   const iManager = idx0_("Менеджер");
   const iCp      = idx0_("Контрагент");
+  const iProject = idx0_("Проект");
   const iRating  = idx0_("Оценка контрагента");
 
   let updated = 0;
@@ -681,8 +682,12 @@ function pushManagerEditsToDB_(ss, managerName) {
   for (const r of rows) {
     const id = String(r[iId] || "").trim();
     if (!id) {
-      currentCounterparty = "";
-      currentRating = "";
+      const labelText = String(r[iProject] || "").trim();
+      const m = labelText.match(/^Контрагент:\s*(.+?)(?:\s*[·•]\s*Самообработка)?$/i);
+      if (m && m[1]) {
+        currentCounterparty = String(m[1]).trim();
+        currentRating = "";
+      }
       skipped++;
       continue;
     }
