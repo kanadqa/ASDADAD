@@ -590,7 +590,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
         }
       }
       const label = new Array(lastCol).fill("");
-      label[idx0_("Проект")] = withSelf ? `Контрагент: ${cp} • Самообработка` : `Контрагент: ${cp}`;
+      label[idx0_("Проект")] = withSelf ? `Контрагент: ${cp} · Самообработка` : `Контрагент: ${cp}`;
       display.push(label);
     }
 
@@ -853,23 +853,30 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
     if (!id) {
       const labelText = String(sh.getRange(r, colProject).getValue() || "").trim();
       if (labelText) {
-        const mergeCols = Math.max(1, lastCol - colProject + 1);
-        try { sh.getRange(r, colProject, 1, mergeCols).breakApart(); } catch (e) {}
-        try { sh.getRange(r, colProject, 1, mergeCols).merge(); } catch (e) {}
+        try { sh.getRange(r, colProject, 1, Math.max(1, lastCol - colProject + 1)).breakApart(); } catch (e) {}
+        sh.getRange(r, 1, 1, lastCol)
+          .setBackground("#f3f4f6")
+          .setFontColor("#6b7280")
+          .setFontWeight("normal");
         sh.getRange(r, colProject)
           .setHorizontalAlignment("left")
           .setFontWeight("bold")
-          .setFontStyle("normal")
           .setFontSize(10)
-          .setFontColor("#334155")
-          .setBackground("#f8fafc");
-        try { sh.setRowHeight(r, 24); } catch (e) {}
+          .setFontColor("#334155");
+        try {
+          sh.getRange(r, 1, 1, lastCol).setBorder(
+            true, null, true, null, null, null,
+            "#cbd5e1",
+            SpreadsheetApp.BorderStyle.SOLID
+          );
+        } catch (e) {}
+        try { sh.setRowHeight(r, 23); } catch (e) {}
       } else {
         sh.getRange(r, 1, 1, lastCol)
           .setBackground("#ffffff")
           .setFontColor("#ffffff")
           .setFontWeight("normal");
-        try { sh.setRowHeight(r, 10); } catch (e) {}
+        try { sh.setRowHeight(r, 8); } catch (e) {}
       }
       prevWasLabel = true;
       continue;
@@ -878,22 +885,11 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
     const isNewBlock = prevWasLabel;
 
     if (isNewBlock) {
-      try {
-        sh.getRange(r, 1, 1, lastCol).setBorder(
-          true, null, null, null, null, null,
-          "#9ca3af",
-          SpreadsheetApp.BorderStyle.SOLID_MEDIUM
-        );
-      } catch (e) {}
-    }
-
-    if (isNewBlock) {
-      try { sh.setRowHeight(r, 32); } catch (e) {}
-      sh.getRange(r, 1, 1, lastCol).setBackground("#ffffff");
+      try { sh.setRowHeight(r, 31); } catch (e) {}
       sh.getRange(r, colProject).setFontWeight("bold");
       sh.getRange(r, colStatus).setFontWeight("bold");
     } else {
-      try { sh.setRowHeight(r, 29); } catch (e) {}
+      try { sh.setRowHeight(r, 30); } catch (e) {}
     }
 
     prevWasLabel = false;
@@ -1167,18 +1163,8 @@ function applyManagerSheetFormatting_(sh) {
     .setFontWeight("bold")
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle")
-    .setBackground("#111827")
+    .setBackground("#0b1220")
     .setFontColor("#ffffff");
-
-  if (lastRow >= layout.startRow) {
-    sh.getRange(layout.startRow, 1, lastRow - layout.startRow + 1, lastCol)
-      .setFontFamily("Inter")
-      .setFontSize(10)
-      .setVerticalAlignment("middle")
-      .setFontColor("#111827")
-      .setBackground("#ffffff")
-      .setWrap(false);
-  }
 
   const colNote = idx1_("Заметка");
   const colLink = idx1_("Ссылка");
@@ -1189,7 +1175,19 @@ function applyManagerSheetFormatting_(sh) {
   if (lastRow >= layout.startRow) {
     const bodyRows = lastRow - layout.startRow + 1;
 
-    sh.getRange(layout.startRow, 1, bodyRows, lastCol).setHorizontalAlignment("center");
+    sh.getRange(layout.startRow, 1, bodyRows, lastCol)
+      .setFontFamily("Inter")
+      .setFontSize(10)
+      .setVerticalAlignment("middle")
+      .setFontColor("#111827")
+      .setBackground("#ffffff")
+      .setWrap(false)
+      .setHorizontalAlignment("center");
+
+    // Правая часть таблицы — мягкий фон для лучшей читаемости больших массивов.
+    sh.getRange(layout.startRow, colNote, bodyRows, lastCol - colNote + 1)
+      .setBackground("#f8fafc");
+
     sh.getRange(layout.startRow, colPassword, bodyRows, 1).setHorizontalAlignment("left");
     sh.getRange(layout.startRow, colNote, bodyRows, 1).setHorizontalAlignment("left").setWrap(true);
 
@@ -1208,10 +1206,10 @@ function applyManagerSheetFormatting_(sh) {
     SpreadsheetApp.BorderStyle.SOLID
   );
 
-  sh.setRowHeight(layout.headerRow, 44);
+  sh.setRowHeight(layout.headerRow, 42);
 
   const limit = Math.min(Math.max(lastRow, layout.startRow), CFG.PRETTY_ROWS_LIMIT);
-  for (let r = layout.startRow; r <= limit; r++) sh.setRowHeight(r, 32);
+  for (let r = layout.startRow; r <= limit; r++) sh.setRowHeight(r, 31);
 }
 
 function applyStatusConditionalFormatting_(sh) {
