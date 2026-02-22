@@ -1420,20 +1420,26 @@ function onSelectionChange(e) {
   const sheetName = sh.getName();
   const isManager = CFG.MANAGER_SHEETS.includes(sheetName);
 
-  // Всегда очищаем старый маркер при смене выделения.
-  clearSelectionMarker_(ss);
-  if (!isManager) return;
+  const props = PropertiesService.getDocumentProperties();
+  const prevRaw = String(props.getProperty(SELECTION_MARKER_KEY) || "");
 
   const layout = getLayout_();
   const row = e.range.getRow();
-  if (row < layout.startRow) return;
-  if (e.range.getNumRows() !== 1) return;
+  const isSingleRow = e.range.getNumRows() === 1;
+  const inDataArea = row >= layout.startRow;
+
+  const currentKey = `${sheetName}||${row}`;
+  if (isManager && isSingleRow && inDataArea && prevRaw === currentKey) return;
+
+  // Снимаем старый маркер только если он действительно был.
+  if (prevRaw) clearSelectionMarker_(ss, prevRaw);
+  if (!isManager || !isSingleRow || !inDataArea) return;
 
   const id = String(sh.getRange(row, idx1_("ID"), 1, 1).getValue() || "").trim();
   if (!id) return; // заголовки блоков/пустые строки не подсвечиваем
 
   setSelectionMarker_(sh, row);
-  PropertiesService.getDocumentProperties().setProperty(SELECTION_MARKER_KEY, `${sheetName}||${row}`);
+  props.setProperty(SELECTION_MARKER_KEY, currentKey);
 }
 
 /* ================= onEdit (timestamps) =================
@@ -1506,9 +1512,9 @@ function onEdit(e) {
 
 const SELECTION_MARKER_KEY = "SYS_SELECTION_MARKER";
 
-function clearSelectionMarker_(ss) {
+function clearSelectionMarker_(ss, rawKey) {
   const props = PropertiesService.getDocumentProperties();
-  const raw = String(props.getProperty(SELECTION_MARKER_KEY) || "");
+  const raw = String(rawKey || props.getProperty(SELECTION_MARKER_KEY) || "");
   if (!raw) return;
 
   const [sheetName, rowStr] = raw.split("||");
@@ -1519,18 +1525,12 @@ function clearSelectionMarker_(ss) {
   if (!sh) return;
 
   const colProject = idx1_("Проект");
-  const colNote = idx1_("Заметка");
   const lastCol = CFG.DB_HEADERS.length;
-  const leftCols = Math.max(1, colNote - colProject);
-  const rightCols = Math.max(1, lastCol - colNote + 1);
 
   try {
-    sh.getRange(row, colProject, 1, leftCols)
-      .setBackground("#ffffff")
-      .setBorder(false, false, false, false, false, false);
-    sh.getRange(row, colNote, 1, rightCols)
-      .setBackground("#f8fafc")
-      .setBorder(false, false, false, false, false, false);
+    sh.getRange(row, colProject, 1, Math.max(1, lastCol - colProject + 1)).setBorder(
+      false, false, false, false, false, false
+    );
   } catch (e) {}
 
   props.deleteProperty(SELECTION_MARKER_KEY);
@@ -1538,18 +1538,14 @@ function clearSelectionMarker_(ss) {
 
 function setSelectionMarker_(sh, row) {
   const colProject = idx1_("Проект");
-  const colNote = idx1_("Заметка");
   const lastCol = CFG.DB_HEADERS.length;
-  const leftCols = Math.max(1, colNote - colProject);
-  const rightCols = Math.max(1, lastCol - colNote + 1);
 
   try {
-    sh.getRange(row, colProject, 1, leftCols)
-      .setBackground("#e0f2fe")
-      .setBorder(true, true, true, true, false, false, "#0284c7", SpreadsheetApp.BorderStyle.SOLID);
-    sh.getRange(row, colNote, 1, rightCols)
-      .setBackground("#dbeafe")
-      .setBorder(true, false, true, true, false, false, "#0284c7", SpreadsheetApp.BorderStyle.SOLID);
+    sh.getRange(row, colProject, 1, Math.max(1, lastCol - colProject + 1)).setBorder(
+      true, false, true, false, false, false,
+      "#94a3b8",
+      SpreadsheetApp.BorderStyle.SOLID
+    );
   } catch (e) {}
 }
 
