@@ -436,6 +436,7 @@ function buildManagerSheets_(ss) {
     try { sh.hideColumn(sh.getRange(1, 2)); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, idx1_("Контрагент"))); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, idx1_("Самообработка"))); } catch (e) {}
+    try { sh.hideColumn(sh.getRange(1, idx1_("Оценка контрагента"))); } catch (e) {}
 
     applyManagerSheetFormatting_(sh);
     applyStatusConditionalFormatting_(sh);
@@ -592,7 +593,9 @@ function refreshManagerSheet_(ss, managerName, opts) {
   const iStatus  = idx0_("Статус");
   const iCp      = idx0_("Контрагент");
   const iProject = idx0_("Проект");
+  const iLabelRating = idx0_("Логин");
   const iId      = idx0_("ID");
+  const iRating  = idx0_("Оценка контрагента");
 
   let rows = data.filter(r => {
     if (String(r[iManager] || "") !== managerName) return false;
@@ -654,6 +657,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
       }
       const label = new Array(lastCol).fill("");
       label[idx0_("Проект")] = withSelf ? `Контрагент: ${cp} · Самообработка` : `Контрагент: ${cp}`;
+      label[iLabelRating] = String(r[iRating] || "").trim();
       display.push(label);
     }
 
@@ -689,6 +693,7 @@ function refreshManagerSheet_(ss, managerName, opts) {
   if (display.length > 0) {
     applyStandardFormats_(sh, layout.startRow, display.length);
     applyManagerValidationsById_(sh, display.length);
+    applyCounterpartyRatingValidations_(sh, display.length);
   }
 
   // оформление (как “раньше”: блоки + разделители)
@@ -749,7 +754,8 @@ function pushManagerEditsToDB_(ss, managerName) {
       const m = labelText.match(/^Контрагент:\s*(.+?)(?:\s*[·•]\s*Самообработка)?$/i);
       if (m && m[1]) {
         currentCounterparty = String(m[1]).trim();
-        currentRating = "";
+        const labelRating = String(r[idx0_("Логин")] || "").trim();
+        currentRating = CFG.RATINGS.includes(labelRating) ? labelRating : "";
       }
       skipped++;
       continue;
@@ -863,6 +869,30 @@ function applyManagerValidationsById_(sh, displayRowCount) {
   }
 }
 
+function applyCounterpartyRatingValidations_(sh, displayRowCount) {
+  if (displayRowCount <= 0) return;
+
+  const start = startRow_();
+  const colId = idx1_("ID");
+  const colProject = idx1_("Проект");
+  const colLabelRating = idx1_("Логин");
+
+  const ids = sh.getRange(start, colId, displayRowCount, 1).getValues();
+  const labels = sh.getRange(start, colProject, displayRowCount, 1).getValues();
+  const ratingDv = dvList_(CFG.RATINGS, false);
+
+  for (let i = 0; i < displayRowCount; i++) {
+    const hasId = String(ids[i][0] || "").trim() !== "";
+    if (hasId) continue;
+
+    const txt = String(labels[i][0] || "").trim();
+    if (!txt.startsWith("Контрагент:")) continue;
+
+    const row = start + i;
+    sh.getRange(row, colLabelRating).setDataValidation(ratingDv);
+  }
+}
+
 /* ================= TABLE DRAW HELPERS ================= */
 
 function clearValidationsForTableArea_(sh) {
@@ -908,6 +938,7 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
   const colId = 1;
   const colProject = idx1_("Проект");
   const colStatus = idx1_("Статус");
+  const colLabelRating = idx1_("Логин");
 
   const ids = sh.getRange(start, colId, displayRowCount, 1).getValues();
 
@@ -935,6 +966,12 @@ function styleBlocksAndSeparators_(sh, displayRowCount) {
           .setHorizontalAlignment("left")
           .setFontWeight("bold")
           .setFontSize(10)
+          .setFontColor("#334155");
+
+        sh.getRange(r, colLabelRating)
+          .setHorizontalAlignment("center")
+          .setFontWeight("bold")
+          .setFontSize(12)
           .setFontColor("#334155");
 
         try {
@@ -1253,7 +1290,6 @@ function applyManagerSheetFormatting_(sh) {
 
   const colNote = idx1_("Заметка");
   const colLink = idx1_("Ссылка");
-  const colRating = idx1_("Оценка контрагента");
   const colPassword = idx1_("Пароль");
   const colBalance = idx1_("Баланс");
 
@@ -1281,7 +1317,6 @@ function applyManagerSheetFormatting_(sh) {
       .setFontColor("#2563eb")
       .setFontLine("underline");
 
-    sh.getRange(layout.startRow, colRating, bodyRows, 1).setFontSize(12);
     sh.getRange(layout.startRow, colBalance, bodyRows, 1).setHorizontalAlignment("right");
   }
 
@@ -1432,6 +1467,7 @@ function adminRestoreFormatActiveSheet() {
     try { sh.hideColumn(sh.getRange(1, 2)); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, idx1_("Контрагент"))); } catch (e) {}
     try { sh.hideColumn(sh.getRange(1, idx1_("Самообработка"))); } catch (e) {}
+    try { sh.hideColumn(sh.getRange(1, idx1_("Оценка контрагента"))); } catch (e) {}
 
     applyManagerSheetFormatting_(sh);
     applyStatusConditionalFormatting_(sh);
@@ -1440,6 +1476,7 @@ function adminRestoreFormatActiveSheet() {
     if (displayCount > 0) {
       applyStandardFormats_(sh, layout.startRow, displayCount);
       applyManagerValidationsById_(sh, displayCount);
+      applyCounterpartyRatingValidations_(sh, displayCount);
       styleBlocksAndSeparators_(sh, displayCount);
     }
 
