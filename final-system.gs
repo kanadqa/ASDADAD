@@ -16,6 +16,7 @@
 
 const CFG = {
   DB: "БД",
+  DASHBOARD: "Дашборд",
 
   MANAGER_SHEETS: ["Alpha", "Giba", "Marcus", "Nitish", "Jacob", "Viza", "Hanare Ro", "xssyao"],
 
@@ -198,7 +199,123 @@ function onOpen() {
     .addItem("АДМИН: Проставить ID пустым строкам в БД", "adminFillMissingIdsInDB")
     .addItem("АДМИН: Восстановить формат текущего листа", "adminRestoreFormatActiveSheet")
     .addItem("АДМИН: Выгрузить БД → листы (ВСЕ строки)", "adminExportDBToAllManagers")
+    .addItem("АДМИН: Обновить дашборд", "adminRefreshDashboard")
     .addToUi();
+}
+
+/* ================= DASHBOARD ================= */
+
+function adminRefreshDashboard() {
+  const ss = SpreadsheetApp.getActive();
+  withSpreadsheetRetry_(() => refreshDashboard_(ss), 4);
+  SpreadsheetApp.getUi().alert("Готово ✅ Дашборд обновлён.");
+}
+
+function ensureDashboardSheet_(ss) {
+  let sh = ss.getSheetByName(CFG.DASHBOARD);
+  if (!sh) sh = ss.insertSheet(CFG.DASHBOARD);
+  return sh;
+}
+
+function refreshDashboard_(ss) {
+  ss = ss || SpreadsheetApp.getActive();
+  const layout = getLayout_();
+  const db = getSheetOrThrow_(ss, CFG.DB);
+  const dash = ensureDashboardSheet_(ss);
+
+  const lastCol = 10;
+  const maxRows = Math.max(200, dash.getMaxRows());
+  dash.getRange(1, 1, maxRows, lastCol).clearContent().clearFormat();
+  trimExtraColumns_(dash, lastCol);
+
+  const lastRow = db.getLastRow();
+  const rows = lastRow >= layout.startRow
+    ? db.getRange(layout.startRow, 1, lastRow - layout.startRow + 1, CFG.DB_HEADERS.length).getValues()
+    : [];
+
+  const iId = idx0_("ID");
+  const iManager = idx0_("Менеджер");
+  const iProject = idx0_("Проект");
+  const iStatus = idx0_("Статус");
+  const iBalance = idx0_("Баланс");
+  const iSent = idx0_("Отправлено");
+  const iMoney = idx0_("Статус денег");
+
+  const inPlayByManagerProject = new Map();
+  const activeBalanceByProject = new Map();
+
+  let totalInPlay = 0;
+  let totalActiveBalance = 0;
+
+  rows.forEach(r => {
+    const id = String(r[iId] || "").trim();
+    if (!id) return;
+
+    const manager = String(r[iManager] || "").trim() || "—";
+    const project = String(r[iProject] || "").trim() || "—";
+    const moneyStatus = String(r[iMoney] || "").trim();
+    const status = String(r[iStatus] || "").trim();
+
+    if (moneyStatus === "🟦 Отыгрывается") {
+      const amount = Number(normalizeNumber_(r[iSent])) || 0;
+      const key = manager + "||" + project;
+      const prev = inPlayByManagerProject.get(key) || { manager, project, sum: 0, cnt: 0 };
+      prev.sum += amount;
+      prev.cnt += 1;
+      inPlayByManagerProject.set(key, prev);
+      totalInPlay += amount;
+    }
+
+    if (status === "● Активно") {
+      const bal = Number(normalizeNumber_(r[iBalance])) || 0;
+      const prev = activeBalanceByProject.get(project) || { project, sum: 0, cnt: 0 };
+      prev.sum += bal;
+      prev.cnt += 1;
+      activeBalanceByProject.set(project, prev);
+      totalActiveBalance += bal;
+    }
+  });
+
+  dash.getRange(1, 1).setValue("Дашборд • by " + CFG.CREATOR_NICK).setFontWeight("bold").setFontSize(14);
+  dash.getRange(2, 1).setValue("Обновлено: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd.MM.yyyy HH:mm:ss")).setFontColor("#475569");
+
+  dash.getRange(4, 1, 1, 2).setValues([["Отыгрывается сейчас (сумма)", totalInPlay]]);
+  dash.getRange(4, 4, 1, 2).setValues([["Активный баланс (сумма)", totalActiveBalance]]);
+  dash.getRange(4, 2, 1, 1).setNumberFormat("#,##0.00");
+  dash.getRange(4, 5, 1, 1).setNumberFormat("#,##0.00");
+  dash.getRange(4, 1, 1, 5).setBackground("#e2e8f0").setFontWeight("bold");
+
+  const t1 = Array.from(inPlayByManagerProject.values())
+    .sort((a, b) => a.manager.localeCompare(b.manager) || a.project.localeCompare(b.project));
+
+  dash.getRange(6, 1).setValue("1) Отыгрывается сейчас: по менеджерам и проектам").setFontWeight("bold").setFontSize(12);
+  dash.getRange(7, 1, 1, 4).setValues([["Менеджер", "Проект", "Сумма", "Кол-во строк"]]).setBackground("#0b1220").setFontColor("#ffffff").setFontWeight("bold");
+  if (t1.length > 0) {
+    const vals = t1.map(x => [x.manager, x.project, x.sum, x.cnt]);
+    dash.getRange(8, 1, vals.length, 4).setValues(vals);
+    dash.getRange(8, 3, vals.length, 1).setNumberFormat("#,##0.00");
+  } else {
+    dash.getRange(8, 1).setValue("Нет данных").setFontColor("#64748b");
+  }
+
+  const row2Start = 10 + Math.max(1, t1.length);
+  const t2 = Array.from(activeBalanceByProject.values())
+    .sort((a, b) => b.sum - a.sum || a.project.localeCompare(b.project));
+
+  dash.getRange(row2Start, 1).setValue("2) Активный баланс: по проектам").setFontWeight("bold").setFontSize(12);
+  dash.getRange(row2Start + 1, 1, 1, 3).setValues([["Проект", "Сумма баланса", "Кол-во строк"]]).setBackground("#0b1220").setFontColor("#ffffff").setFontWeight("bold");
+
+  if (t2.length > 0) {
+    const vals2 = t2.map(x => [x.project, x.sum, x.cnt]);
+    dash.getRange(row2Start + 2, 1, vals2.length, 3).setValues(vals2);
+    dash.getRange(row2Start + 2, 2, vals2.length, 1).setNumberFormat("#,##0.00");
+  } else {
+    dash.getRange(row2Start + 2, 1).setValue("Нет данных").setFontColor("#64748b");
+  }
+
+  dash.setFrozenRows(7);
+  [220, 190, 170, 140, 180].forEach((w, i) => dash.setColumnWidth(i + 1, w));
+  dash.getRange(1, 1, Math.max(row2Start + 20, 40), lastCol).setFontFamily("Inter").setFontSize(10);
 }
 
 /* ================= ADMIN BUILD SYSTEM ================= */
@@ -247,6 +364,7 @@ function buildSystem_(ss) {
   CFG.MANAGER_SHEETS.forEach(name => {
     withSpreadsheetRetry_(() => refreshManagerSheet_(ss, name), 4);
   });
+  withSpreadsheetRetry_(() => refreshDashboard_(ss), 4);
 
   SpreadsheetApp.getUi().alert(
     `Готово ✅
@@ -496,6 +614,7 @@ function managerPushMyDataToDB() {
 
     withSpreadsheetRetry_(() => sanitizeCounterpartyNicksInDB_(ss), 4);
     const res = withSpreadsheetRetry_(() => pushManagerEditsToDB_(ss, managerName), 4);
+    withSpreadsheetRetry_(() => refreshDashboard_(ss), 4);
 
     SpreadsheetApp.getUi().alert(
       `Готово ✅
@@ -559,6 +678,7 @@ function adminCollectAllManagers() {
       totalUpdated += res.updated;
       totalSkipped += res.skipped;
     });
+    withSpreadsheetRetry_(() => refreshDashboard_(ss), 4);
   } finally {
     lock.releaseLock();
   }
@@ -866,6 +986,7 @@ function adminExportDBToAllManagers() {
     CFG.MANAGER_SHEETS.forEach(name => {
       withSpreadsheetRetry_(() => refreshManagerSheet_(ss, name, { includeHiddenStatuses: true }), 4);
     });
+    withSpreadsheetRetry_(() => refreshDashboard_(ss), 4);
 
     SpreadsheetApp.getUi().alert(`Готово ✅ БД выгружена во все листы менеджеров (ВСЕ строки).
 Дата баланса/Обновлено не меняются из-за выгрузки.`);
