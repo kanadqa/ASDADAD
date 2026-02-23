@@ -217,14 +217,39 @@ function ensureDashboardSheet_(ss) {
   return sh;
 }
 
+function parseBalanceDate_(v) {
+  if (!v && v !== 0) return null;
+  if (Object.prototype.toString.call(v) === "[object Date]") {
+    return isNaN(v.getTime()) ? null : v;
+  }
+
+  const s = String(v).trim();
+  if (!s) return null;
+
+  const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/.exec(s);
+  if (m) {
+    const d = Number(m[1]);
+    const mo = Number(m[2]) - 1;
+    const y = Number(m[3]);
+    const hh = Number(m[4] || 0);
+    const mm = Number(m[5] || 0);
+    const ss = Number(m[6] || 0);
+    const dt = new Date(y, mo, d, hh, mm, ss);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  const dt = new Date(s);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
 function refreshDashboard_(ss) {
   ss = ss || SpreadsheetApp.getActive();
   const layout = getLayout_();
   const db = getSheetOrThrow_(ss, CFG.DB);
   const dash = ensureDashboardSheet_(ss);
 
-  const lastCol = 10;
-  const maxRows = Math.max(200, dash.getMaxRows());
+  const lastCol = 8;
+  const maxRows = Math.max(260, dash.getMaxRows());
   dash.getRange(1, 1, maxRows, lastCol).clearContent().clearFormat();
   trimExtraColumns_(dash, lastCol);
 
@@ -239,13 +264,23 @@ function refreshDashboard_(ss) {
   const iStatus = idx0_("Статус");
   const iBalance = idx0_("Баланс");
   const iSent = idx0_("Отправлено");
+  const iReady = idx0_("Готово к выводу");
+  const iOnWithdrawal = idx0_("На выводе");
   const iMoney = idx0_("Статус денег");
+  const iBalanceDate = idx0_("Дата баланса");
 
   const inPlayByManagerProject = new Map();
   const activeBalanceByProject = new Map();
+  const funnelByManager = new Map();
+  const riskByManagerProject = new Map();
+  const overdueByManagerProject = new Map();
+  const OVERDUE_DAYS = 9;
+  const now = new Date();
+  const msPerDay = 24 * 60 * 60 * 1000;
 
   let totalInPlay = 0;
   let totalActiveBalance = 0;
+  let totalOverdue = 0;
 
   rows.forEach(r => {
     const id = String(r[iId] || "").trim();
@@ -266,6 +301,16 @@ function refreshDashboard_(ss) {
       totalInPlay += amount;
     }
 
+    const sent = Number(normalizeNumber_(r[iSent])) || 0;
+    const ready = Number(normalizeNumber_(r[iReady])) || 0;
+    const onWithdrawal = Number(normalizeNumber_(r[iOnWithdrawal])) || 0;
+    const funnel = funnelByManager.get(manager) || { manager, sent: 0, ready: 0, onWithdrawal: 0, cnt: 0 };
+    funnel.sent += sent;
+    funnel.ready += ready;
+    funnel.onWithdrawal += onWithdrawal;
+    funnel.cnt += 1;
+    funnelByManager.set(manager, funnel);
+
     if (status === "● Активно") {
       const bal = Number(normalizeNumber_(r[iBalance])) || 0;
       const prev = activeBalanceByProject.get(project) || { project, sum: 0, cnt: 0 };
@@ -273,6 +318,25 @@ function refreshDashboard_(ss) {
       prev.cnt += 1;
       activeBalanceByProject.set(project, prev);
       totalActiveBalance += bal;
+
+      const d = parseBalanceDate_(r[iBalanceDate]);
+      if (d) {
+        const ageDays = Math.floor((now.getTime() - d.getTime()) / msPerDay);
+        if (ageDays > OVERDUE_DAYS) {
+          const key = manager + "||" + project;
+          const overdue = overdueByManagerProject.get(key) || { manager, project, cnt: 0 };
+          overdue.cnt += 1;
+          overdueByManagerProject.set(key, overdue);
+          totalOverdue += 1;
+        }
+      }
+    }
+
+    if (status === "⚠ Проблема") {
+      const key = manager + "||" + project;
+      const risk = riskByManagerProject.get(key) || { manager, project, cnt: 0 };
+      risk.cnt += 1;
+      riskByManagerProject.set(key, risk);
     }
   });
 
@@ -281,9 +345,10 @@ function refreshDashboard_(ss) {
 
   dash.getRange(4, 1, 1, 2).setValues([["Отыгрывается сейчас (сумма)", totalInPlay]]);
   dash.getRange(4, 4, 1, 2).setValues([["Активный баланс (сумма)", totalActiveBalance]]);
+  dash.getRange(4, 7, 1, 2).setValues([["Просрочено > 9 дней", totalOverdue]]);
   dash.getRange(4, 2, 1, 1).setNumberFormat("#,##0.00");
   dash.getRange(4, 5, 1, 1).setNumberFormat("#,##0.00");
-  dash.getRange(4, 1, 1, 5).setBackground("#e2e8f0").setFontWeight("bold");
+  dash.getRange(4, 1, 1, 8).setBackground("#e2e8f0").setFontWeight("bold");
 
   const t1 = Array.from(inPlayByManagerProject.values())
     .sort((a, b) => a.manager.localeCompare(b.manager) || a.project.localeCompare(b.project));
@@ -313,9 +378,53 @@ function refreshDashboard_(ss) {
     dash.getRange(row2Start + 2, 1).setValue("Нет данных").setFontColor("#64748b");
   }
 
+  const row3Start = row2Start + 4 + Math.max(1, t2.length);
+  const t3 = Array.from(overdueByManagerProject.values())
+    .sort((a, b) => b.cnt - a.cnt || a.manager.localeCompare(b.manager) || a.project.localeCompare(b.project));
+
+  dash.getRange(row3Start, 1).setValue("3) Просроченные аккаунты: Дата баланса старше 9 дней (активные)").setFontWeight("bold").setFontSize(12);
+  dash.getRange(row3Start + 1, 1, 1, 3).setValues([["Менеджер", "Проект", "Кол-во аккаунтов"]]).setBackground("#0b1220").setFontColor("#ffffff").setFontWeight("bold");
+
+  if (t3.length > 0) {
+    const vals3 = t3.map(x => [x.manager, x.project, x.cnt]);
+    dash.getRange(row3Start + 2, 1, vals3.length, 3).setValues(vals3);
+  } else {
+    dash.getRange(row3Start + 2, 1).setValue("Нет данных").setFontColor("#64748b");
+  }
+
+  const row4Start = row3Start + 4 + Math.max(1, t3.length);
+  const t4 = Array.from(funnelByManager.values())
+    .sort((a, b) => a.manager.localeCompare(b.manager));
+
+  dash.getRange(row4Start, 1).setValue("4) Воронка денег по менеджерам: Отправлено → Готово к выводу → На выводе").setFontWeight("bold").setFontSize(12);
+  dash.getRange(row4Start + 1, 1, 1, 5).setValues([["Менеджер", "Отправлено", "Готово к выводу", "На выводе", "Кол-во строк"]]).setBackground("#0b1220").setFontColor("#ffffff").setFontWeight("bold");
+
+  if (t4.length > 0) {
+    const vals4 = t4.map(x => [x.manager, x.sent, x.ready, x.onWithdrawal, x.cnt]);
+    dash.getRange(row4Start + 2, 1, vals4.length, 5).setValues(vals4);
+    dash.getRange(row4Start + 2, 2, vals4.length, 3).setNumberFormat("#,##0.00");
+  } else {
+    dash.getRange(row4Start + 2, 1).setValue("Нет данных").setFontColor("#64748b");
+  }
+
+  const row5Start = row4Start + 4 + Math.max(1, t4.length);
+  const t5 = Array.from(riskByManagerProject.values())
+    .sort((a, b) => b.cnt - a.cnt || a.manager.localeCompare(b.manager) || a.project.localeCompare(b.project));
+
+  dash.getRange(row5Start, 1).setValue("5) Риск-блок: количество ⚠ Проблема по менеджеру/проекту").setFontWeight("bold").setFontSize(12);
+  dash.getRange(row5Start + 1, 1, 1, 3).setValues([["Менеджер", "Проект", "Кол-во проблем"]]).setBackground("#0b1220").setFontColor("#ffffff").setFontWeight("bold");
+
+  if (t5.length > 0) {
+    const vals5 = t5.map(x => [x.manager, x.project, x.cnt]);
+    dash.getRange(row5Start + 2, 1, vals5.length, 3).setValues(vals5);
+  } else {
+    dash.getRange(row5Start + 2, 1).setValue("Нет данных").setFontColor("#64748b");
+  }
+
   dash.setFrozenRows(7);
-  [220, 190, 170, 140, 180].forEach((w, i) => dash.setColumnWidth(i + 1, w));
-  dash.getRange(1, 1, Math.max(row2Start + 20, 40), lastCol).setFontFamily("Inter").setFontSize(10);
+  [290, 220, 180, 180, 160, 140, 170, 120].forEach((w, i) => dash.setColumnWidth(i + 1, w));
+  const paintedRows = Math.max(row5Start + 20, 70);
+  dash.getRange(1, 1, paintedRows, lastCol).setFontFamily("Inter").setFontSize(10);
 }
 
 /* ================= ADMIN BUILD SYSTEM ================= */
